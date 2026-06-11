@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Slit Panorama Studio Pro</title>
+    <title>Slit Panorama</title>
 
     <style>
       body { margin: 0; background: #121212; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 15px; box-sizing: border-box; min-height: 100vh; }
@@ -30,7 +30,7 @@
   </head>
   <body>
 
-    <h2>Panorama Slit Scan</h2>
+    <h2>Slit Panorama</h2>
 
     <div class="video-container" id="videoWrapper">
       <video id="video" autoplay playsinline muted></video>
@@ -57,15 +57,14 @@
       const video = document.getElementById("video");
       const videoWrapper = document.getElementById("videoWrapper");
       const pano = document.getElementById("panorama");
-      const ctx = pano.getContext("2d", { alpha: false }); // Optimización: Desactivar canal alpha en el canvas
+      const ctx = pano.getContext("2d", { alpha: false });
       const statusTxt = document.getElementById("statusTxt");
       const progress = document.getElementById("progress");
 
       let running = false;
       let xpos = 0;
       
-      // OPTIMIZACIÓN 1: Reducir el grosor de la rebanada a 1 píxel para máxima fluidez
-      const SLICE_WIDTH = 1; 
+      const SLICE_WIDTH = 2; 
 
       let currentStream = null;
       let videoDevices = [];
@@ -105,13 +104,12 @@
         const deviceId = videoDevices[currentDeviceIndex].deviceId;
 
         try {
-          // OPTIMIZACIÓN 2: Pedir resoluciones estándar (720p). 1080p o más destruye el rendimiento en web móviles.
           currentStream = await navigator.mediaDevices.getUserMedia({
             video: { 
               deviceId: deviceId ? { exact: deviceId } : undefined,
               width: { ideal: 1280 },
               height: { ideal: 720 },
-              frameRate: { ideal: 60 } // Intentar capturar a 60fps si el dispositivo lo permite
+              frameRate: { ideal: 60 }
             }
           });
           
@@ -131,13 +129,12 @@
       function captureSlice() {
         if (!running) return;
 
-        // OPTIMIZACIÓN 3: Pintar DIRECTAMENTE desde el elemento Video (sin pasar por un tempCanvas)
         const centerX = Math.floor(video.videoWidth / 2 - SLICE_WIDTH / 2);
 
         ctx.drawImage(
           video,
-          centerX, 0, SLICE_WIDTH, video.videoHeight, // Recorte del centro del video
-          xpos, 0, SLICE_WIDTH, pano.height          // Dibujo en el canvas principal
+          centerX, 0, SLICE_WIDTH, video.videoHeight,
+          xpos, 0, SLICE_WIDTH, pano.height
         );
 
         xpos += SLICE_WIDTH;
