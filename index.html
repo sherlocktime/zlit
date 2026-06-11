@@ -165,7 +165,7 @@
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
-            if (sliceWidth <= 4) { // límite de ancho para el pisado con alfa... 4 o más
+            if (sliceWidth <= 24) { // límite de ancho para el pisado con alfa... 4 o más
                 ctx.drawImage(
                     video,
                     centerX, 0, sliceWidth, video.videoHeight,
