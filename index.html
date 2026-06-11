@@ -157,38 +157,65 @@
         maskCanvas.height = 720;
         const mctx = maskCanvas.getContext('2d');
 
-        ctx.imageSmoothingEnabled = false;
-        mctx.imageSmoothingEnabled = false;
-
         let grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
         grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.5, 'rgba(0,0,0,1)');
+
+        let lastVideoTime = -1;
 
         function captureSlice() {
             if (!running) return;
 
-            const centerX = ((video.videoWidth / 2 - sliceWidth / 2) | 0);
+            // esperar frame real del video (clave del fix)
+            video.requestVideoFrameCallback(onFrame);
+        }
 
-            if (sliceWidth <= 24) { // límite de ancho para el pisado con alfa... 4 o más
+        function onFrame(now, metadata) {
+            if (!running) return;
+
+            // evitar duplicación de frames
+            if (metadata.mediaTime === lastVideoTime) {
+                requestAnimationFrame(captureSlice);
+                return;
+            }
+            lastVideoTime = metadata.mediaTime;
+
+            const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
+
+            if (sliceWidth <= 24) {
+
                 ctx.drawImage(
                     video,
                     centerX, 0, sliceWidth, video.videoHeight,
                     xpos, 0, sliceWidth, pano.height
                 );
+
                 xpos += sliceWidth;
 
             } else {
-                if (maskCanvas.height !== video.videoHeight) { maskCanvas.height = video.videoHeight; }
 
-                mctx.clearRect(0, 0, sliceWidth, video.videoHeight);
-                mctx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+                if (maskCanvas.height !== video.videoHeight) {
+                    maskCanvas.height = video.videoHeight;
+                }
+
+                mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                mctx.drawImage(
+                    video,
+                    centerX, 0, sliceWidth, video.videoHeight,
+                    0, 0, sliceWidth, video.videoHeight
+                );
+
                 mctx.globalCompositeOperation = 'destination-in';
-
                 mctx.fillStyle = grad;
                 mctx.fillRect(0, 0, sliceWidth, video.videoHeight);
                 mctx.globalCompositeOperation = 'source-over';
 
-                ctx.drawImage(maskCanvas, 0, 0, sliceWidth, video.videoHeight, xpos, 0, sliceWidth, pano.height);
-                xpos += Math.ceil(sliceWidth / 2);
+                ctx.drawImage(
+                    maskCanvas,
+                    0, 0, sliceWidth, video.videoHeight,
+                    xpos, 0, sliceWidth, pano.height
+                );
+
+                xpos += sliceWidth / 2;
             }
 
             const percent = (xpos / pano.width) * 100;
