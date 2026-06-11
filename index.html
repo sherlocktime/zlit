@@ -55,7 +55,7 @@
         </div>
     </div>
 
-    <canvas id="panorama" width="4000" height="400"></canvas>
+    <canvas id="panorama" width="1" height="1"></canvas>
 
     <script>
         const video = document.getElementById("video");
@@ -124,6 +124,7 @@
                 video.srcObject = currentStream;
 
                 video.onloadedmetadata = () => {
+                    pano.width = video.videoHeight * 6;
                     pano.height = video.videoHeight;
                     ctx.fillStyle = "black";
                     ctx.fillRect(0, 0, pano.width, pano.height);
