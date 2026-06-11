@@ -124,7 +124,7 @@
                 video.srcObject = currentStream;
 
                 video.onloadedmetadata = () => {
-                    pano.width = video.videoHeight * 6;
+                    pano.width = video.videoHeight * 4;
                     pano.height = video.videoHeight;
                     ctx.fillStyle = "black";
                     ctx.fillRect(0, 0, pano.width, pano.height);
