@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Slit Panorama</title>
+    <title>Slit Panorama Studio</title>
 
     <style>
       body {
@@ -27,11 +27,24 @@
         font-size: 1.4rem;
       }
 
-      /* PREVIA DEL VIDEO MÁS CHICA (Optimizado para vertical) */
+      /* Sistema de Vistas */
+      .view {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      /* --- MODO CAPTURA --- */
       .video-container {
         position: relative;
-        width: 45vw; /* Ocupa menos espacio en ancho */
-        max-width: 220px; /* Límite para que no moleste */
+        width: 45vw;
+        max-width: 220px;
         border: 2px solid #333;
         border-radius: 6px;
         overflow: hidden;
@@ -45,7 +58,6 @@
         display: block;
       }
 
-      /* Línea guía (Slit) */
       .slit-guide {
         position: absolute;
         top: 0;
@@ -70,7 +82,6 @@
         100% { opacity: 0.4; }
       }
 
-      /* Controles compactos */
       .controls {
         display: flex;
         gap: 8px;
@@ -95,8 +106,9 @@
       #startBtn:hover { background-color: #2cd052; }
       #stopBtn { background-color: #ff3b30; }
       #stopBtn:hover { background-color: #ff453a; }
+      #viewBtn { background-color: #007aff; }
+      #viewBtn:hover { background-color: #0a84ff; }
 
-      /* Estado y progreso */
       .status-panel {
         font-size: 0.85rem;
         color: #aaa;
@@ -120,7 +132,6 @@
         transition: width 0.1s linear;
       }
 
-      /* EL LIENZO (Ahora entra cómodo en la pantalla) */
       canvas {
         width: 95vw;
         max-width: 600px;
@@ -129,34 +140,81 @@
         background: black;
         border-radius: 6px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.6);
-        margin-top: 5px;
+      }
+
+      /* --- MODO VISOR CILÍNDRICO --- */
+      /* Este contenedor actúa como la "ventana" fija por donde mirás */
+      .viewer-container {
+        width: 95vw;
+        max-width: 600px;
+        height: 300px;
+        border: 2px solid #555;
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+        background: #050505;
+        cursor: grab;
+      }
+      
+      .viewer-container:active {
+        cursor: grabbing;
+      }
+
+      /* El lienzo interno que se mueve infinitamente */
+      #viewerCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: auto; /* Mantiene la proporción */
       }
     </style>
   </head>
   <body>
-    <h2>Panorama Slit Scan</h2>
 
-    <div class="video-container" id="videoWrapper">
-      <video id="video" autoplay playsinline muted></video>
-      <div class="slit-guide"></div>
-    </div>
+    <div id="captureView" class="view">
+      <h2>Panorama Slit Scan</h2>
 
-    <div class="controls">
-      <button id="startBtn">Iniciar</button>
-      <button id="stopBtn">Detener</button>
-      <button id="saveBtn">Guardar</button>
-    </div>
-
-    <div class="status-panel">
-      <span id="statusTxt">Cargando cámara...</span>
-      <div class="progress-bar" style="margin-top: 6px;">
-        <div id="progress"></div>
+      <div class="video-container" id="videoWrapper">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="slit-guide"></div>
       </div>
+
+      <div class="controls">
+        <button id="startBtn">Iniciar</button>
+        <button id="stopBtn">Detener</button>
+        <button id="viewBtn">Ver en Visor 🔄</button>
+        <button id="saveBtn">Guardar PNG</button>
+      </div>
+
+      <div class="status-panel">
+        <span id="statusTxt">Cargando cámara...</span>
+        <div class="progress-bar" style="margin-top: 6px;">
+          <div id="progress"></div>
+        </div>
+      </div>
+
+      <canvas id="panorama" width="4000" height="400"></canvas>
     </div>
 
-    <canvas id="panorama" width="4000" height="400"></canvas>
+    <div id="statusView" class="view hidden">
+      <h2>Visor Cilíndrico Loop</h2>
+      
+      <div class="controls">
+        <button id="backBtn">⬅ Volver a Captura</button>
+      </div>
+
+      <div class="viewer-container" id="viewerContainer">
+        <canvas id="viewerCanvas"></canvas>
+      </div>
+      
+      <p style="font-size: 0.85rem; color: #888; text-align: center; margin: 0;">
+        Arrastrá con el mouse o el dedo para girar manualmente.
+      </p>
+    </div>
 
     <script>
+      // Elementos de captura
       const video = document.getElementById("video");
       const videoWrapper = document.getElementById("videoWrapper");
       const pano = document.getElementById("panorama");
@@ -164,12 +222,28 @@
       const statusTxt = document.getElementById("statusTxt");
       const progress = document.getElementById("progress");
 
+      // Vistas
+      const captureView = document.getElementById("captureView");
+      const statusView = document.getElementById("statusView");
+
+      // Elementos del Visor
+      const viewerContainer = document.getElementById("viewerContainer");
+      const viewerCanvas = document.getElementById("viewerCanvas");
+      const vCtx = viewerCanvas.getContext("2d");
+
       const tempCanvas = document.createElement("canvas");
       const tempCtx = tempCanvas.getContext("2d");
 
       let running = false;
       let xpos = 0;
       const SLICE_WIDTH = 4;
+
+      // Variables de animación del visor
+      let viewerRunning = false;
+      let scrollOffset = 0; 
+      let scrollSpeed = 1.5; // Velocidad del giro automático
+      let isDragging = false;
+      let startX = 0;
 
       async function startCamera() {
         try {
@@ -219,9 +293,9 @@
         requestAnimationFrame(captureSlice);
       }
 
+      // --- CONTROLES DE CAPTURA ---
       document.getElementById("startBtn").onclick = () => {
         if (!video.videoWidth) return;
-
         if (xpos >= pano.width || !running) {
           if (xpos >= pano.width) {
             xpos = 0;
@@ -241,12 +315,99 @@
         statusTxt.innerText = "Pausado.";
       };
 
+      // MEJORA 1: GUARDAR CON NOMBRE ÚNICO (CON LA HORA)
       document.getElementById("saveBtn").onclick = () => {
+        const ahora = new Date();
+        const año = ahora.getFullYear();
+        // padStart asegura que siempre tengan 2 dígitos (ej: "05" en vez de "5")
+        const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+        const dia = String(ahora.getDate()).padStart(2, '0');
+        const horas = String(ahora.getHours()).padStart(2, '0');
+        const minutos = String(ahora.getMinutes()).padStart(2, '0');
+        const segundos = String(ahora.getSeconds()).padStart(2, '0');
+
+        const nombreArchivo = `panorama_${año}${mes}${dia}_${horas}${minutos}${segundos}.png`;
+
         const a = document.createElement("a");
         a.href = pano.toDataURL("image/png");
-        a.download = "panorama.png";
+        a.download = nombreArchivo;
         a.click();
       };
+
+      // --- MEJORA 2: LÓGICA DEL VISOR CILÍNDRICO ---
+      document.getElementById("viewBtn").onclick = () => {
+        // Pausar captura
+        running = false;
+        videoWrapper.classList.remove("scanning");
+
+        // Intercambiar vistas
+        captureView.classList.add("hidden");
+        statusView.classList.remove("hidden");
+
+        // Configurar el tamaño del canvas del visor
+        viewerCanvas.height = viewerContainer.clientHeight;
+        // Calculamos el ancho proporcional respecto a lo que se haya escaneado
+        const aspect = pano.width / pano.height;
+        viewerCanvas.width = viewerCanvas.height * aspect;
+
+        viewerRunning = true;
+        animateViewer();
+      };
+
+      document.getElementById("backBtn").onclick = () => {
+        viewerRunning = false;
+        statusView.classList.add("hidden");
+        captureView.classList.remove("hidden");
+      };
+
+      function animateViewer() {
+        if (!viewerRunning) return;
+
+        vCtx.clearRect(0, 0, viewerCanvas.width, viewerCanvas.height);
+
+        // Si no se está arrastrando, se mueve solo
+        if (!isDragging) {
+          scrollOffset -= scrollSpeed;
+        }
+
+        // Efecto Matemático de Bucle Cilíndrico Infinito:
+        // Normalizamos el desplazamiento para que nunca pase del ancho del lienzo
+        const w = viewerCanvas.width;
+        scrollOffset = ((scrollOffset % w) + w) % w;
+
+        // Dibujamos la imagen original dos veces continuas para tapar el "corte"
+        vCtx.drawImage(pano, scrollOffset - w, 0, w, viewerCanvas.height);
+        vCtx.drawImage(pano, scrollOffset, 0, w, viewerCanvas.height);
+
+        requestAnimationFrame(animateViewer);
+      }
+
+      // --- AGARRE Y ARRASTRE DEL VISOR (Mouse y Pantalla Táctil) ---
+      function dragStart(e) {
+        isDragging = true;
+        startX = (e.pageX || e.touches[0].pageX) - scrollOffset;
+      }
+
+      function dragMove(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        const x = e.pageX || e.touches[0].pageX;
+        scrollOffset = x - startX;
+      }
+
+      function dragEnd() {
+        isDragging = false;
+      }
+
+      // Eventos de Mouse
+      viewerContainer.addEventListener('mousedown', dragStart);
+      window.addEventListener('mousemove', dragMove);
+      window.addEventListener('mouseup', dragEnd);
+
+      // Eventos de Celular (Touch)
+      viewerContainer.addEventListener('touchstart', dragStart, {passive: false});
+      window.addEventListener('touchmove', dragMove, {passive: false});
+      window.addEventListener('touchend', dragEnd);
 
       startCamera();
     </script>
