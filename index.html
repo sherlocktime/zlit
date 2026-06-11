@@ -44,7 +44,7 @@
 
     <div class="controls">
       <button id="startBtn">Iniciar</button>
-      <button id="speedBtn">Ancho: 2px</button>
+      <button id="speedBtn">2 px</button>
       <button id="switchBtn">Cámara</button>
       <button id="saveBtn">Guardar</button>
     </div>
@@ -205,7 +205,7 @@
       speedBtn.onclick = () => {
         speedIndex = (speedIndex + 1) % speeds.length;
         sliceWidth = speeds[speedIndex];
-        speedBtn.innerText = `Ancho: ${sliceWidth}px`;
+        speedBtn.innerText = `${sliceWidth} px`;
       };
 
       document.getElementById("switchBtn").onclick = () => {
