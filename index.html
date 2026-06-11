@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slit Panorama</title>
+
+    <style>
+      body {
+        margin: 0;
+        background: #121212;
+        color: #e0e0e0;
+        font-family: system-ui, -apple-system, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+        padding: 20px;
+      }
+
+      h2 {
+        margin: 5px 0;
+        font-weight: 400;
+        letter-spacing: 1px;
+      }
+
+      /* Contenedor del video con la línea guía */
+      .video-container {
+        position: relative;
+        width: 90vw;
+        max-width: 500px;
+        border: 2px solid #333;
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+      }
+
+      video {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      /* Indicador visual: Línea de corte (Slit) */
+      .slit-guide {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 2px;
+        background-color: #ff3b30;
+        transform: translateX(-50%);
+        box-shadow: 0 0 8px #ff3b30;
+        pointer-events: none;
+        display: none; /* Se activa con JS cuando escanea */
+      }
+
+      .scanning .slit-guide {
+        display: block;
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0% { opacity: 0.4; }
+        50% { opacity: 1; }
+        100% { opacity: 0.4; }
+      }
+
+      /* Controles */
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: #2c2c2e;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      button:hover { background-color: #3a3a3c; }
+      #startBtn { background-color: #34c759; color: black; }
+      #startBtn:hover { background-color: #2cd052; }
+      #stopBtn { background-color: #ff3b30; }
+      #stopBtn:hover { background-color: #ff453a; }
+
+      /* Estado y progreso */
+      .status-panel {
+        font-size: 0.9rem;
+        color: #aaa;
+        text-align: center;
+      }
+
+      .progress-bar {
+        width: 90vw;
+        max-width: 500px;
+        height: 6px;
+        background-color: #222;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      #progress {
+        width: 0%;
+        height: 100%;
+        background-color: #007aff;
+        transition: width 0.1s linear;
+      }
+
+      /* Canvas donde se dibuja el panorama */
+      canvas {
+        width: 90vw;
+        max-width: 800px;
+        border: 2px solid #333;
+        background: black;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Panorama Slit Scan</h2>
+
+    <div class="video-container" id="videoWrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="slit-guide"></div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Iniciar</button>
+      <button id="stopBtn">Detener</button>
+      <button id="saveBtn">Guardar PNG</button>
+    </div>
+
+    <div class="status-panel">
+      <span id="statusTxt">Cargando cámara...</span>
+      <div class="progress-bar" style="margin-top: 8px;">
+        <div id="progress"></div>
+      </div>
+    </div>
+
+    <canvas id="panorama" width="4000" height="400"></canvas>
+
+    <script>
+      const video = document.getElementById("video");
+      const videoWrapper = document.getElementById("videoWrapper");
+      const pano = document.getElementById("panorama");
+      const ctx = pano.getContext("2d");
+      const statusTxt = document.getElementById("statusTxt");
+      const progress = document.getElementById("progress");
+
+      const tempCanvas = document.createElement("canvas");
+      const tempCtx = tempCanvas.getContext("2d");
+
+      let running = false;
+      let xpos = 0;
+      const SLICE_WIDTH = 4;
+
+      async function startCamera() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+          });
+          video.srcObject = stream;
+
+          // Evento clave: Esperar a que el video realmente tenga dimensiones válidas
+          video.onloadedmetadata = () => {
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            pano.height = video.videoHeight;
+
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, pano.width, pano.height);
+            statusTxt.innerText = "Cámara lista. Presiona Iniciar.";
+          };
+        } catch (err) {
+          statusTxt.innerText = "Error al acceder a la cámara: " + err.message;
+        }
+      }
+
+      function captureSlice() {
+        if (!running) return;
+
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        const centerX = Math.floor(tempCanvas.width / 2 - SLICE_WIDTH / 2);
+
+        ctx.drawImage(
+          tempCanvas,
+          centerX, 0, SLICE_WIDTH, tempCanvas.height, // Origen (Centro del video)
+          xpos, 0, SLICE_WIDTH, pano.height          // Destino (Lienzo panorama)
+        );
+
+        xpos += SLICE_WIDTH;
+        
+        // Actualizar barra de progreso visual
+        const percent = (xpos / pano.width) * 100;
+        progress.style.width = `${percent}%`;
+
+        if (xpos >= pano.width) {
+          running = false;
+          videoWrapper.classList.remove("scanning");
+          statusTxt.innerText = "¡Escaneo completado!";
+          return;
+        }
+
+        requestAnimationFrame(captureSlice);
+      }
+
+      document.getElementById("startBtn").onclick = () => {
+        if (!video.videoWidth) return; // Evitar iniciar si la cámara no cargó
+
+        if (xpos >= pano.width || !running) {
+          if (xpos >= pano.width) {
+            xpos = 0;
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, pano.width, pano.height);
+          }
+          running = true;
+          videoWrapper.classList.add("scanning");
+          statusTxt.innerText = "Escaneando... Mueve la cámara despacio.";
+          captureSlice();
+        }
+      };
+
+      document.getElementById("stopBtn").onclick = () => {
+        running = false;
+        videoWrapper.classList.remove("scanning");
+        statusTxt.innerText = "Escaneo pausado.";
+      };
+
+      document.getElementById("saveBtn").onclick = () => {
+        const a = document.createElement("a");
+        a.href = pano.toDataURL("image/png");
+        a.download = "panorama.png";
+        a.click();
+      };
+
+      // Inicializar
+      startCamera();
+    </script>
+  </body>
+</html>
