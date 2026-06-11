@@ -156,6 +156,9 @@
         maskCanvas.height = 720;
         const mctx = maskCanvas.getContext('2d');
 
+        let grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
+        grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.5, 'rgba(0,0,0,1)');
+
         function captureSlice() {
             if (!running) return;
 
@@ -181,7 +184,7 @@
                 mctx.globalCompositeOperation = 'source-over';
 
                 ctx.drawImage(maskCanvas, 0, 0, sliceWidth, video.videoHeight, xpos, 0, sliceWidth, pano.height);
-                xpos += Math.ceil(sliceWidth * 0.75);
+                xpos += Math.ceil(sliceWidth / 2);
             }
 
             const percent = (xpos / pano.width) * 100;
@@ -222,8 +225,7 @@
             speedBtn.innerText = `${sliceWidth} px`;
 
             grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
-            grad.addColorStop(0, 'rgba(0,0,0,0)');
-            grad.addColorStop(0.5, 'rgba(0,0,0,1)');
+            grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.5, 'rgba(0,0,0,1)');
 
         };
 
