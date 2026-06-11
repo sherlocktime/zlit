@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
-  <head>
+
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Slit Panorama</title>
@@ -16,13 +17,10 @@
       .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
       button { padding: 8px 16px; border: none; border-radius: 5px; background-color: #2c2c2e; color: white; font-weight: bold; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; }
       button:hover { background-color: #3a3a3c; }
-      
-      /* Botón unificado con estados */
       #startBtn { background-color: #34c759; color: black; }
       #startBtn:hover { background-color: #2cd052; }
       #startBtn.running { background-color: #ff3b30; color: white; }
       #startBtn.running:hover { background-color: #ff453a; }
-      
       #speedBtn { background-color: #ff9500; color: black; }
       #speedBtn:hover { background-color: #ffaa33; }
       #switchBtn { background-color: #007aff; }
@@ -32,194 +30,163 @@
       #progress { width: 0%; height: 100%; background-color: #007aff; transition: width 0.05s linear; }
       canvas { width: 95vw; max-width: 600px; height: auto; border: 2px solid #444; background: black; border-radius: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
     </style>
-  </head>
-  <body>
+</head>
+
+<body>
 
     <h2>Slit Panorama</h2>
 
     <div class="video-container" id="videoWrapper">
-      <video id="video" autoplay playsinline muted></video>
-      <div class="slit-guide"></div>
+        <video id="video" autoplay playsinline muted></video>
+        <div class="slit-guide"></div>
     </div>
 
     <div class="controls">
-      <button id="startBtn">Iniciar</button>
-      <button id="speedBtn">2 px</button>
-      <button id="switchBtn">Cámara</button>
-      <button id="saveBtn">Guardar</button>
+        <button id="startBtn">Iniciar</button>
+        <button id="speedBtn">2 px</button>
+        <button id="switchBtn">Lente</button>
+        <button id="saveBtn">Guardar</button>
     </div>
 
     <div class="status-panel">
-      <span id="statusTxt">Cargando cámara...</span>
-      <div class="progress-bar" style="margin-top: 6px;">
-        <div id="progress"></div>
-      </div>
+        <span id="statusTxt">Cargando cámara...</span>
+        <div class="progress-bar" style="margin-top: 6px;">
+            <div id="progress"></div>
+        </div>
     </div>
 
     <canvas id="panorama" width="4000" height="400"></canvas>
 
     <script>
-      const video = document.getElementById("video");
-      const videoWrapper = document.getElementById("videoWrapper");
-      const pano = document.getElementById("panorama");
-      const ctx = pano.getContext("2d", { alpha: false });
-      const statusTxt = document.getElementById("statusTxt");
-      const progress = document.getElementById("progress");
-      const startBtn = document.getElementById("startBtn");
-      const speedBtn = document.getElementById("speedBtn");
+        const video = document.getElementById("video");
+        const videoWrapper = document.getElementById("videoWrapper");
+        const pano = document.getElementById("panorama");
+        const ctx = pano.getContext("2d", { alpha: false });
+        const statusTxt = document.getElementById("statusTxt");
+        const progress = document.getElementById("progress");
+        const startBtn = document.getElementById("startBtn");
+        const speedBtn = document.getElementById("speedBtn");
 
-      let running = false;
-      let xpos = 0;
-      
-      // Configuración de anchos de banda (Velocidad)
-      const speeds = [1, 2, 4, 10];
-      let speedIndex = 1; // Inicia en 2 (índice 1)
-      let sliceWidth = speeds[speedIndex]; 
+        let running = false;
+        let xpos = 0;
 
-      let currentStream = null;
-      let videoDevices = [];
-      let currentDeviceIndex = 0;
+        const speeds = [1, 2, 4, 8, 12, 16];
+        let speedIndex = 1;
+        let sliceWidth = speeds[speedIndex];
 
-      function stopCurrentStream() {
-        if (currentStream) {
-          currentStream.getTracks().forEach(track => track.stop());
-        }
-      }
+        let currentStream = null;
+        let videoDevices = [];
+        let currentDeviceIndex = 0;
 
-      async function initCamera() {
-        stopCurrentStream();
-        statusTxt.innerText = "Conectando cámara...";
-
-        if (videoDevices.length === 0) {
-          try {
-            const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            initialStream.getTracks().forEach(track => track.stop());
-            
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            videoDevices = devices.filter(device => device.kind === 'videoinput');
-            
-            const backCamIndex = videoDevices.findIndex(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('ambiente'));
-            if (backCamIndex !== -1) currentDeviceIndex = backCamIndex;
-          } catch (err) {
-            statusTxt.innerText = "Permiso denegado: " + err.message;
-            return;
-          }
-        }
-
-        if (videoDevices.length === 0) {
-          statusTxt.innerText = "No se detectaron cámaras.";
-          return;
-        }
-
-        const deviceId = videoDevices[currentDeviceIndex].deviceId;
-
-        try {
-          currentStream = await navigator.mediaDevices.getUserMedia({
-            video: { 
-              deviceId: deviceId ? { exact: deviceId } : undefined,
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 60 }
+        function stopCurrentStream() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
             }
-          });
-          
-          video.srcObject = currentStream;
-
-          video.onloadedmetadata = () => {
-            pano.height = video.videoHeight;
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, pano.width, pano.height);
-            statusTxt.innerText = `Cámara lista: ${videoDevices[currentDeviceIndex].label || 'Cámara ' + (currentDeviceIndex + 1)}`;
-          };
-        } catch (err) {
-          statusTxt.innerText = "Error al abrir cámara: " + err.message;
         }
-      }
 
-      function updateStartButtonState(isRunning) {
-        if (isRunning) {
-          startBtn.innerText = "Parar";
-          startBtn.classList.add("running");
-        } else {
-          startBtn.innerText = "Iniciar";
-          startBtn.classList.remove("running");
+        async function initCamera() {
+            stopCurrentStream();
+            statusTxt.innerText = "Conectando cámara...";
+
+            if (videoDevices.length === 0) {
+                try {
+                    const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    initialStream.getTracks().forEach(track => track.stop());
+
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+                    const backCamIndex = videoDevices.findIndex(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('ambiente'));
+                    if (backCamIndex !== -1) currentDeviceIndex = backCamIndex;
+                } catch (err) {
+                    statusTxt.innerText = "Permiso denegado: " + err.message;
+                    return;
+                }
+            }
+
+            if (videoDevices.length === 0) {
+                statusTxt.innerText = "No se detectaron cámaras.";
+                return;
+            }
+
+            const deviceId = videoDevices[currentDeviceIndex].deviceId;
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        deviceId: deviceId ? { exact: deviceId } : undefined,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 60 }
+                    }
+                });
+
+                video.srcObject = currentStream;
+
+                video.onloadedmetadata = () => {
+                    pano.height = video.videoHeight;
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(0, 0, pano.width, pano.height);
+                    statusTxt.innerText = `Cámara lista: ${videoDevices[currentDeviceIndex].label || 'Cámara ' + (currentDeviceIndex + 1)}`;
+                };
+            } catch (err) {
+                statusTxt.innerText = "Error al abrir cámara: " + err.message;
+            }
         }
-      }
 
-      function stopScanning(message = "Pausado.") {
-        running = false;
-        videoWrapper.classList.remove("scanning");
-        statusTxt.innerText = message;
-        updateStartButtonState(false);
-      }
+        function updateStartButtonState(isRunning) {
+            if (isRunning) {
+                startBtn.innerText = "Parar";
+                startBtn.classList.add("running");
+            } else {
+                startBtn.innerText = "Iniciar";
+                startBtn.classList.remove("running");
+            }
+        }
 
-    //   function captureSlice() {
-    //     if (!running) return;
+        function stopScanning(message = "Pausado.") {
+            running = false;
+            videoWrapper.classList.remove("scanning");
+            statusTxt.innerText = message;
+            updateStartButtonState(false);
+        }
 
-    //     const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
+        const maskCanvas = document.createElement('canvas');
+        const mctx = maskCanvas.getContext('2d');
 
-    //     ctx.drawImage(
-    //       video,
-    //       centerX, 0, sliceWidth, video.videoHeight,
-    //       xpos, 0, sliceWidth, pano.height
-    //     );
-
-    //     xpos += sliceWidth;
-        
-    //     const percent = (xpos / pano.width) * 100;
-    //     progress.style.width = `${percent}%`;
-
-    //     if (xpos >= pano.width) {
-    //       stopScanning("¡Completado!");
-    //       return;
-    //     }
-
-    //     requestAnimationFrame(captureSlice);
-    //   }
-
-            // Creamos un canvas auxiliar en memoria (solo una vez, fuera de la función)
-            const maskCanvas = document.createElement('canvas');
-            const mctx = maskCanvas.getContext('2d');
-
-            function captureSlice() {
+        function captureSlice() {
             if (!running) return;
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
-            // 1. Ajustar el tamaño del canvas auxiliar al tamaño de la banda actual
-            maskCanvas.width = sliceWidth;
-            maskCanvas.height = video.videoHeight;
+            if (sliceWidth <= 2) {
+                ctx.drawImage(
+                    video,
+                    centerX, 0, sliceWidth, video.videoHeight,
+                    xpos, 0, sliceWidth, pano.height
+                );
+                xpos += sliceWidth;
 
-            // 2. Limpiar y recortar el trozo de video en el canvas auxiliar
-            mctx.clearRect(0, 0, sliceWidth, video.videoHeight);
-            mctx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+            } else {  // Encabalgamiento usando alfa para los casos de banda ancha
+                maskCanvas.width = sliceWidth;
+                maskCanvas.height = video.videoHeight;
 
-            // 3. Aplicar la máscara de transparencia (borde izquierdo y derecho suave)
-            // Solo tiene sentido si el ancho es mayor a 2px
-            if (sliceWidth > 2) {
+                mctx.clearRect(0, 0, sliceWidth, video.videoHeight);
+                mctx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+
                 mctx.globalCompositeOperation = 'destination-in';
                 const grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
-                grad.addColorStop(0, 'rgba(0,0,0,0)');       // Transparente a la izquierda
-                grad.addColorStop(0.2, 'rgba(0,0,0,1)');     // Opaco al 20% del ancho
-                grad.addColorStop(0.8, 'rgba(0,0,0,1)');     // Opaco al 80% del ancho
-                grad.addColorStop(1, 'rgba(0,0,0,0)');       // Transparente a la derecha
-                
+                grad.addColorStop(0, 'rgba(0,0,0,0)');
+                grad.addColorStop(0.25, 'rgba(0,0,0,1)');
+                grad.addColorStop(0.75, 'rgba(0,0,0,1)');
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
                 mctx.fillStyle = grad;
                 mctx.fillRect(0, 0, sliceWidth, video.videoHeight);
-                
-                // Restablecer el modo por defecto
                 mctx.globalCompositeOperation = 'source-over';
+
+                ctx.drawImage(maskCanvas, xpos, 0, sliceWidth, pano.height);
+                xpos += Math.ceil(sliceWidth * 0.75);
             }
-
-            // 4. Pintar el resultado mezclado en el canvas principal
-            ctx.drawImage(maskCanvas, xpos, 0, sliceWidth, pano.height);
-
-            // 5. AVANCE CLAVE: Avanzamos MENOS del ancho total para que se encabalguen
-            // Si avanzamos la mitad del ancho, el degradado de una se mezcla con la siguiente
-            const step = sliceWidth > 2 ? Math.ceil(sliceWidth / 2) : sliceWidth;
-            xpos += step;
-            
-            // (El resto de tu lógica de progreso y requestAnimationFrame sigue igual...)
             const percent = (xpos / pano.width) * 100;
             progress.style.width = `${percent}%`;
 
@@ -229,74 +196,56 @@
             }
 
             requestAnimationFrame(captureSlice);
+        }
+
+        // --- CONTROLES ---
+
+        startBtn.onclick = () => {
+            if (!video.videoWidth) return;
+
+            if (running) {
+                stopScanning();
+            } else {
+                if (xpos >= pano.width) {
+                    xpos = 0;
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(0, 0, pano.width, pano.height);
+                }
+                running = true;
+                videoWrapper.classList.add("scanning");
+                statusTxt.innerText = "Escaneando...";
+                updateStartButtonState(true);
+                captureSlice();
             }
+        };
 
-      // --- CONTROLES ---
-      
-      // Botón único Iniciar / Parar (Toggle)
-      startBtn.onclick = () => {
-        if (!video.videoWidth) return;
+        speedBtn.onclick = () => {
+            speedIndex = (speedIndex + 1) % speeds.length;
+            sliceWidth = speeds[speedIndex];
+            speedBtn.innerText = `${sliceWidth} px`;
+        };
 
-        if (running) {
-          // Si está corriendo, se detiene
-          stopScanning();
-        } else {
-          // Si está detenido, inicia o reinicia
-          if (xpos >= pano.width) {
-            xpos = 0;
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, pano.width, pano.height);
-          }
-          running = true;
-          videoWrapper.classList.add("scanning");
-          statusTxt.innerText = "Escaneando...";
-          updateStartButtonState(true);
-          captureSlice();
-        }
-      };
+        document.getElementById("switchBtn").onclick = () => {
+            if (videoDevices.length <= 1) {
+                statusTxt.innerText = "No hay más cámaras.";
+                return;
+            }
+            stopScanning();
+            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+            initCamera();
+        };
 
-      // Botón de velocidad (Ancho de banda)
-      speedBtn.onclick = () => {
-        speedIndex = (speedIndex + 1) % speeds.length;
-        sliceWidth = speeds[speedIndex];
-        speedBtn.innerText = `${sliceWidth} px`;
-      };
+        document.getElementById("saveBtn").onclick = () => {
+            const ahora = new Date();
+            const nombreArchivo = `panorama_${ahora.toISOString().replace(/[:.]/g, "-")}.png`;
+            const a = document.createElement("a");
+            a.href = pano.toDataURL("image/png");
+            a.download = nombreArchivo;
+            a.click();
+        };
 
-      document.getElementById("switchBtn").onclick = () => {
-        if (videoDevices.length <= 1) {
-          statusTxt.innerText = "No hay más cámaras.";
-          return;
-        }
-        stopScanning();
-        currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
         initCamera();
-      };
-
-      document.getElementById("saveBtn").onclick = () => {
-        const ahora = new Date();
-        const nombreArchivo = `panorama_${ahora.toISOString().replace(/[:.]/g, "-")}.png`;
-        const a = document.createElement("a");
-        a.href = pano.toDataURL("image/png");
-        a.download = nombreArchivo;
-        a.click();
-      };
-
-      initCamera();
     </script>
-  </body>
+</body>
+
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
