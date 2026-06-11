@@ -20,6 +20,8 @@
       #startBtn:hover { background-color: #2cd052; }
       #stopBtn { background-color: #ff3b30; }
       #stopBtn:hover { background-color: #ff453a; }
+      #switchBtn { background-color: #007aff; }
+      #switchBtn:hover { background-color: #0a84ff; }
       .status-panel { font-size: 0.85rem; color: #aaa; text-align: center; width: 90vw; max-width: 500px; }
       .progress-bar { width: 100%; height: 5px; background-color: #222; border-radius: 3px; overflow: hidden; }
       #progress { width: 0%; height: 100%; background-color: #007aff; transition: width 0.1s linear; }
@@ -38,6 +40,7 @@
     <div class="controls">
       <button id="startBtn">Iniciar</button>
       <button id="stopBtn">Detener</button>
+      <button id="switchBtn">Cambiar Cámara 🔄</button>
       <button id="saveBtn">Guardar PNG</button>
     </div>
 
@@ -65,12 +68,54 @@
       let xpos = 0;
       const SLICE_WIDTH = 2;
 
-      async function startCamera() {
+      // Variables para la gestión de múltiples cámaras
+      let currentStream = null;
+      let videoDevices = [];
+      let currentDeviceIndex = 0;
+
+      // Detiene la cámara actual de forma limpia
+      function stopCurrentStream() {
+        if (currentStream) {
+          currentStream.getTracks().forEach(track => track.stop());
+        }
+      }
+
+      async function initCamera() {
+        stopCurrentStream();
+        statusTxt.innerText = "Conectando cámara...";
+
+        // Si no tenemos la lista de cámaras, primero pedimos permiso genérico y las listamos
+        if (videoDevices.length === 0) {
+          try {
+            const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            initialStream.getTracks().forEach(track => track.stop()); // Apagamos rápido
+            
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            videoDevices = devices.filter(device => device.kind === 'videoinput');
+            
+            // Intentar empezar por la cámara trasera de manera predeterminada si existe
+            const backCamIndex = videoDevices.findIndex(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('ambiente'));
+            if (backCamIndex !== -1) currentDeviceIndex = backCamIndex;
+          } catch (err) {
+            statusTxt.innerText = "Permiso denegado o sin cámaras: " + err.message;
+            return;
+          }
+        }
+
+        if (videoDevices.length === 0) {
+          statusTxt.innerText = "No se detectaron cámaras.";
+          return;
+        }
+
+        // Seleccionamos el ID de la cámara actual en la rotación
+        const deviceId = videoDevices[currentDeviceIndex].deviceId;
+
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" },
+          currentStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: deviceId ? { exact: deviceId } : undefined }
           });
-          video.srcObject = stream;
+          
+          video.srcObject = currentStream;
 
           video.onloadedmetadata = () => {
             tempCanvas.width = video.videoWidth;
@@ -79,10 +124,10 @@
 
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, pano.width, pano.height);
-            statusTxt.innerText = "Cámara lista.";
+            statusTxt.innerText = `Cámara lista: ${videoDevices[currentDeviceIndex].label || 'Cámara ' + (currentDeviceIndex + 1)}`;
           };
         } catch (err) {
-          statusTxt.innerText = "Error de cámara: " + err.message;
+          statusTxt.innerText = "Error al abrir cámara seleccionada: " + err.message;
         }
       }
 
@@ -113,6 +158,7 @@
         requestAnimationFrame(captureSlice);
       }
 
+      // --- CONTROLES ---
       document.getElementById("startBtn").onclick = () => {
         if (!video.videoWidth) return;
         if (xpos >= pano.width || !running) {
@@ -134,6 +180,20 @@
         statusTxt.innerText = "Pausado.";
       };
 
+      // Botón para alternar entre cámaras
+      document.getElementById("switchBtn").onclick = () => {
+        if (videoDevices.length <= 1) {
+          statusTxt.innerText = "No hay más cámaras disponibles para alternar.";
+          return;
+        }
+        running = false;
+        videoWrapper.classList.remove("scanning");
+        
+        // Avanzamos a la siguiente cámara (y volvemos a cero si llegamos al final)
+        currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+        initCamera();
+      };
+
       document.getElementById("saveBtn").onclick = () => {
         const ahora = new Date();
         const año = ahora.getFullYear();
@@ -151,7 +211,8 @@
         a.click();
       };
 
-      startCamera();
+      // Inicializar por primera vez
+      initCamera();
     </script>
   </body>
 </html>
