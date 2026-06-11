@@ -152,6 +152,8 @@
         }
 
         const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = 16;
+        maskCanvas.height = 720;
         const mctx = maskCanvas.getContext('2d');
 
         function captureSlice() {
@@ -159,7 +161,7 @@
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
-            if (sliceWidth <= 24) { // límite de ancho para el pisado con alfa... 4 o más
+            if (sliceWidth <= 4) { // límite de ancho para el pisado con alfa... 4 o más
                 ctx.drawImage(
                     video,
                     centerX, 0, sliceWidth, video.videoHeight,
@@ -168,23 +170,20 @@
                 xpos += sliceWidth;
 
             } else {
-                maskCanvas.width = sliceWidth;
-                maskCanvas.height = video.videoHeight;
+                if (maskCanvas.height !== video.videoHeight) { maskCanvas.height = video.videoHeight; }
 
                 mctx.clearRect(0, 0, sliceWidth, video.videoHeight);
                 mctx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
-
                 mctx.globalCompositeOperation = 'destination-in';
-                const grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
 
-                grad.addColorStop(0, 'rgba(0,0,0,0)');
-                grad.addColorStop(0.5, 'rgba(0,0,0,1)');
                 mctx.fillStyle = grad;
                 mctx.fillRect(0, 0, sliceWidth, video.videoHeight);
                 mctx.globalCompositeOperation = 'source-over';
-                ctx.drawImage(maskCanvas, xpos, 0, sliceWidth, pano.height);
-                xpos += Math.ceil(sliceWidth / 2);
+
+                ctx.drawImage(maskCanvas, 0, 0, sliceWidth, video.videoHeight, xpos, 0, sliceWidth, pano.height);
+                xpos += Math.ceil(sliceWidth * 0.75);
             }
+
             const percent = (xpos / pano.width) * 100;
             progress.style.width = `${percent}%`;
 
@@ -221,6 +220,11 @@
             speedIndex = (speedIndex + 1) % speeds.length;
             sliceWidth = speeds[speedIndex];
             speedBtn.innerText = `${sliceWidth} px`;
+
+            grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(0.5, 'rgba(0,0,0,1)');
+
         };
 
         document.getElementById("switchBtn").onclick = () => {
