@@ -159,7 +159,7 @@
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
-            if (sliceWidth <= 2) {
+            if (sliceWidth <= 24) { // límite de ancho para el pisado con alfa... 4 o más
                 ctx.drawImage(
                     video,
                     centerX, 0, sliceWidth, video.videoHeight,
@@ -167,7 +167,7 @@
                 );
                 xpos += sliceWidth;
 
-            } else {  // Encabalgamiento usando alfa para los casos de banda ancha
+            } else {
                 maskCanvas.width = sliceWidth;
                 maskCanvas.height = video.videoHeight;
 
@@ -237,9 +237,9 @@
 
         document.getElementById("saveBtn").onclick = () => {
             const ahora = new Date();
-            const nombreArchivo = `panorama_${ahora.toISOString().replace(/[:.]/g, "-")}.png`;
+            const nombreArchivo = `panorama_${ahora.toISOString().replace(/[:.]/g, "-")}.jpg`;
             const a = document.createElement("a");
-            a.href = pano.toDataURL("image/png");
+            a.href = pano.toDataURL("image/jpeg", 0.92);
             a.download = nombreArchivo;
             a.click();
         };
