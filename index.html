@@ -176,19 +176,13 @@
 
                 mctx.globalCompositeOperation = 'destination-in';
                 const grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
-                // grad.addColorStop(0, 'rgba(0,0,0,0)');
-                // grad.addColorStop(0.25, 'rgba(0,0,0,1)');
-                // grad.addColorStop(0.75, 'rgba(0,0,0,1)');
-                // grad.addColorStop(1, 'rgba(0,0,0,0)');
-                grad.addColorStop(0, 'rgba(0,0,0,1)');
+
+                grad.addColorStop(0, 'rgba(0,0,0,0)');
                 grad.addColorStop(0.5, 'rgba(0,0,0,1)');
-                grad.addColorStop(1, 'rgba(0,0,0,0)');
                 mctx.fillStyle = grad;
                 mctx.fillRect(0, 0, sliceWidth, video.videoHeight);
                 mctx.globalCompositeOperation = 'source-over';
-
                 ctx.drawImage(maskCanvas, xpos, 0, sliceWidth, pano.height);
-                // xpos += Math.ceil(sliceWidth * 0.75);
                 xpos += Math.ceil(sliceWidth / 2);
             }
             const percent = (xpos / pano.width) * 100;
