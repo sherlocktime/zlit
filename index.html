@@ -153,29 +153,83 @@
         updateStartButtonState(false);
       }
 
-      function captureSlice() {
-        if (!running) return;
+    //   function captureSlice() {
+    //     if (!running) return;
 
-        const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
+    //     const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
-        ctx.drawImage(
-          video,
-          centerX, 0, sliceWidth, video.videoHeight,
-          xpos, 0, sliceWidth, pano.height
-        );
+    //     ctx.drawImage(
+    //       video,
+    //       centerX, 0, sliceWidth, video.videoHeight,
+    //       xpos, 0, sliceWidth, pano.height
+    //     );
 
-        xpos += sliceWidth;
+    //     xpos += sliceWidth;
         
-        const percent = (xpos / pano.width) * 100;
-        progress.style.width = `${percent}%`;
+    //     const percent = (xpos / pano.width) * 100;
+    //     progress.style.width = `${percent}%`;
 
-        if (xpos >= pano.width) {
-          stopScanning("¡Completado!");
-          return;
-        }
+    //     if (xpos >= pano.width) {
+    //       stopScanning("¡Completado!");
+    //       return;
+    //     }
 
-        requestAnimationFrame(captureSlice);
-      }
+    //     requestAnimationFrame(captureSlice);
+    //   }
+
+            // Creamos un canvas auxiliar en memoria (solo una vez, fuera de la función)
+            const maskCanvas = document.createElement('canvas');
+            const mctx = maskCanvas.getContext('2d');
+
+            function captureSlice() {
+            if (!running) return;
+
+            const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
+
+            // 1. Ajustar el tamaño del canvas auxiliar al tamaño de la banda actual
+            maskCanvas.width = sliceWidth;
+            maskCanvas.height = video.videoHeight;
+
+            // 2. Limpiar y recortar el trozo de video en el canvas auxiliar
+            mctx.clearRect(0, 0, sliceWidth, video.videoHeight);
+            mctx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+
+            // 3. Aplicar la máscara de transparencia (borde izquierdo y derecho suave)
+            // Solo tiene sentido si el ancho es mayor a 2px
+            if (sliceWidth > 2) {
+                mctx.globalCompositeOperation = 'destination-in';
+                const grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
+                grad.addColorStop(0, 'rgba(0,0,0,0)');       // Transparente a la izquierda
+                grad.addColorStop(0.2, 'rgba(0,0,0,1)');     // Opaco al 20% del ancho
+                grad.addColorStop(0.8, 'rgba(0,0,0,1)');     // Opaco al 80% del ancho
+                grad.addColorStop(1, 'rgba(0,0,0,0)');       // Transparente a la derecha
+                
+                mctx.fillStyle = grad;
+                mctx.fillRect(0, 0, sliceWidth, video.videoHeight);
+                
+                // Restablecer el modo por defecto
+                mctx.globalCompositeOperation = 'source-over';
+            }
+
+            // 4. Pintar el resultado mezclado en el canvas principal
+            ctx.drawImage(maskCanvas, xpos, 0, sliceWidth, pano.height);
+
+            // 5. AVANCE CLAVE: Avanzamos MENOS del ancho total para que se encabalguen
+            // Si avanzamos la mitad del ancho, el degradado de una se mezcla con la siguiente
+            const step = sliceWidth > 2 ? Math.ceil(sliceWidth / 2) : sliceWidth;
+            xpos += step;
+            
+            // (El resto de tu lógica de progreso y requestAnimationFrame sigue igual...)
+            const percent = (xpos / pano.width) * 100;
+            progress.style.width = `${percent}%`;
+
+            if (xpos >= pano.width) {
+                stopScanning("¡Completado!");
+                return;
+            }
+
+            requestAnimationFrame(captureSlice);
+            }
 
       // --- CONTROLES ---
       
@@ -231,3 +285,18 @@
     </script>
   </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
