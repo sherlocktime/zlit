@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Slit Panorama Studio</title>
+    <title>Slit Panorama Studio Pro</title>
 
     <style>
       body { margin: 0; background: #121212; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 15px; box-sizing: border-box; min-height: 100vh; }
@@ -24,7 +24,7 @@
       #switchBtn:hover { background-color: #0a84ff; }
       .status-panel { font-size: 0.85rem; color: #aaa; text-align: center; width: 90vw; max-width: 500px; }
       .progress-bar { width: 100%; height: 5px; background-color: #222; border-radius: 3px; overflow: hidden; }
-      #progress { width: 0%; height: 100%; background-color: #007aff; transition: width 0.1s linear; }
+      #progress { width: 0%; height: 100%; background-color: #007aff; transition: width 0.05s linear; }
       canvas { width: 95vw; max-width: 600px; height: auto; border: 2px solid #444; background: black; border-radius: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
     </style>
   </head>
@@ -57,23 +57,20 @@
       const video = document.getElementById("video");
       const videoWrapper = document.getElementById("videoWrapper");
       const pano = document.getElementById("panorama");
-      const ctx = pano.getContext("2d");
+      const ctx = pano.getContext("2d", { alpha: false }); // Optimización: Desactivar canal alpha en el canvas
       const statusTxt = document.getElementById("statusTxt");
       const progress = document.getElementById("progress");
 
-      const tempCanvas = document.createElement("canvas");
-      const tempCtx = tempCanvas.getContext("2d");
-
       let running = false;
       let xpos = 0;
-      const SLICE_WIDTH = 2;
+      
+      // OPTIMIZACIÓN 1: Reducir el grosor de la rebanada a 1 píxel para máxima fluidez
+      const SLICE_WIDTH = 1; 
 
-      // Variables para la gestión de múltiples cámaras
       let currentStream = null;
       let videoDevices = [];
       let currentDeviceIndex = 0;
 
-      // Detiene la cámara actual de forma limpia
       function stopCurrentStream() {
         if (currentStream) {
           currentStream.getTracks().forEach(track => track.stop());
@@ -84,20 +81,18 @@
         stopCurrentStream();
         statusTxt.innerText = "Conectando cámara...";
 
-        // Si no tenemos la lista de cámaras, primero pedimos permiso genérico y las listamos
         if (videoDevices.length === 0) {
           try {
             const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            initialStream.getTracks().forEach(track => track.stop()); // Apagamos rápido
+            initialStream.getTracks().forEach(track => track.stop());
             
             const devices = await navigator.mediaDevices.enumerateDevices();
             videoDevices = devices.filter(device => device.kind === 'videoinput');
             
-            // Intentar empezar por la cámara trasera de manera predeterminada si existe
             const backCamIndex = videoDevices.findIndex(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('ambiente'));
             if (backCamIndex !== -1) currentDeviceIndex = backCamIndex;
           } catch (err) {
-            statusTxt.innerText = "Permiso denegado o sin cámaras: " + err.message;
+            statusTxt.innerText = "Permiso denegado: " + err.message;
             return;
           }
         }
@@ -107,40 +102,42 @@
           return;
         }
 
-        // Seleccionamos el ID de la cámara actual en la rotación
         const deviceId = videoDevices[currentDeviceIndex].deviceId;
 
         try {
+          // OPTIMIZACIÓN 2: Pedir resoluciones estándar (720p). 1080p o más destruye el rendimiento en web móviles.
           currentStream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: deviceId ? { exact: deviceId } : undefined }
+            video: { 
+              deviceId: deviceId ? { exact: deviceId } : undefined,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 60 } // Intentar capturar a 60fps si el dispositivo lo permite
+            }
           });
           
           video.srcObject = currentStream;
 
           video.onloadedmetadata = () => {
-            tempCanvas.width = video.videoWidth;
-            tempCanvas.height = video.videoHeight;
             pano.height = video.videoHeight;
-
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, pano.width, pano.height);
             statusTxt.innerText = `Cámara lista: ${videoDevices[currentDeviceIndex].label || 'Cámara ' + (currentDeviceIndex + 1)}`;
           };
         } catch (err) {
-          statusTxt.innerText = "Error al abrir cámara seleccionada: " + err.message;
+          statusTxt.innerText = "Error al abrir cámara: " + err.message;
         }
       }
 
       function captureSlice() {
         if (!running) return;
 
-        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-        const centerX = Math.floor(tempCanvas.width / 2 - SLICE_WIDTH / 2);
+        // OPTIMIZACIÓN 3: Pintar DIRECTAMENTE desde el elemento Video (sin pasar por un tempCanvas)
+        const centerX = Math.floor(video.videoWidth / 2 - SLICE_WIDTH / 2);
 
         ctx.drawImage(
-          tempCanvas,
-          centerX, 0, SLICE_WIDTH, tempCanvas.height,
-          xpos, 0, SLICE_WIDTH, pano.height
+          video,
+          centerX, 0, SLICE_WIDTH, video.videoHeight, // Recorte del centro del video
+          xpos, 0, SLICE_WIDTH, pano.height          // Dibujo en el canvas principal
         );
 
         xpos += SLICE_WIDTH;
@@ -180,38 +177,26 @@
         statusTxt.innerText = "Pausado.";
       };
 
-      // Botón para alternar entre cámaras
       document.getElementById("switchBtn").onclick = () => {
         if (videoDevices.length <= 1) {
-          statusTxt.innerText = "No hay más cámaras disponibles para alternar.";
+          statusTxt.innerText = "No hay más cámaras.";
           return;
         }
         running = false;
         videoWrapper.classList.remove("scanning");
-        
-        // Avanzamos a la siguiente cámara (y volvemos a cero si llegamos al final)
         currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
         initCamera();
       };
 
       document.getElementById("saveBtn").onclick = () => {
         const ahora = new Date();
-        const año = ahora.getFullYear();
-        const mes = String(ahora.getMonth() + 1).padStart(2, '0');
-        const dia = String(ahora.getDate()).padStart(2, '0');
-        const horas = String(ahora.getHours()).padStart(2, '0');
-        const minutos = String(ahora.getMinutes()).padStart(2, '0');
-        const segundos = String(ahora.getSeconds()).padStart(2, '0');
-
-        const nombreArchivo = `panorama_${año}${mes}${dia}_${horas}${minutos}${segundos}.png`;
-
+        const nombreArchivo = `panorama_${ahora.toISOString().replace(/[:.]/g, "-")}.png`;
         const a = document.createElement("a");
         a.href = pano.toDataURL("image/png");
         a.download = nombreArchivo;
         a.click();
       };
 
-      // Inicializar por primera vez
       initCamera();
     </script>
   </body>
