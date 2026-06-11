@@ -14,25 +14,29 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 15px;
-        padding: 20px;
+        gap: 12px;
+        padding: 15px;
+        box-sizing: border-box;
+        min-height: 100vh;
       }
 
       h2 {
-        margin: 5px 0;
+        margin: 0;
         font-weight: 400;
         letter-spacing: 1px;
+        font-size: 1.4rem;
       }
 
-      /* Contenedor del video con la línea guía */
+      /* PREVIA DEL VIDEO MÁS CHICA (Optimizado para vertical) */
       .video-container {
         position: relative;
-        width: 90vw;
-        max-width: 500px;
+        width: 45vw; /* Ocupa menos espacio en ancho */
+        max-width: 220px; /* Límite para que no moleste */
         border: 2px solid #333;
-        border-radius: 8px;
+        border-radius: 6px;
         overflow: hidden;
         display: flex;
+        background: #000;
       }
 
       video {
@@ -41,7 +45,7 @@
         display: block;
       }
 
-      /* Indicador visual: Línea de corte (Slit) */
+      /* Línea guía (Slit) */
       .slit-guide {
         position: absolute;
         top: 0;
@@ -50,9 +54,9 @@
         width: 2px;
         background-color: #ff3b30;
         transform: translateX(-50%);
-        box-shadow: 0 0 8px #ff3b30;
+        box-shadow: 0 0 6px #ff3b30;
         pointer-events: none;
-        display: none; /* Se activa con JS cuando escanea */
+        display: none;
       }
 
       .scanning .slit-guide {
@@ -66,21 +70,22 @@
         100% { opacity: 0.4; }
       }
 
-      /* Controles */
+      /* Controles compactos */
       .controls {
         display: flex;
-        gap: 10px;
+        gap: 8px;
         flex-wrap: wrap;
         justify-content: center;
       }
 
       button {
-        padding: 10px 20px;
+        padding: 8px 16px;
         border: none;
         border-radius: 5px;
         background-color: #2c2c2e;
         color: white;
         font-weight: bold;
+        font-size: 0.9rem;
         cursor: pointer;
         transition: background 0.2s;
       }
@@ -93,15 +98,16 @@
 
       /* Estado y progreso */
       .status-panel {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         color: #aaa;
         text-align: center;
+        width: 90vw;
+        max-width: 500px;
       }
 
       .progress-bar {
-        width: 90vw;
-        max-width: 500px;
-        height: 6px;
+        width: 100%;
+        height: 5px;
         background-color: #222;
         border-radius: 3px;
         overflow: hidden;
@@ -114,14 +120,16 @@
         transition: width 0.1s linear;
       }
 
-      /* Canvas donde se dibuja el panorama */
+      /* EL LIENZO (Ahora entra cómodo en la pantalla) */
       canvas {
-        width: 90vw;
-        max-width: 800px;
-        border: 2px solid #333;
+        width: 95vw;
+        max-width: 600px;
+        height: auto;
+        border: 2px solid #444;
         background: black;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        border-radius: 6px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+        margin-top: 5px;
       }
     </style>
   </head>
@@ -136,12 +144,12 @@
     <div class="controls">
       <button id="startBtn">Iniciar</button>
       <button id="stopBtn">Detener</button>
-      <button id="saveBtn">Guardar PNG</button>
+      <button id="saveBtn">Guardar</button>
     </div>
 
     <div class="status-panel">
       <span id="statusTxt">Cargando cámara...</span>
-      <div class="progress-bar" style="margin-top: 8px;">
+      <div class="progress-bar" style="margin-top: 6px;">
         <div id="progress"></div>
       </div>
     </div>
@@ -170,7 +178,6 @@
           });
           video.srcObject = stream;
 
-          // Evento clave: Esperar a que el video realmente tenga dimensiones válidas
           video.onloadedmetadata = () => {
             tempCanvas.width = video.videoWidth;
             tempCanvas.height = video.videoHeight;
@@ -178,10 +185,10 @@
 
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, pano.width, pano.height);
-            statusTxt.innerText = "Cámara lista. Presiona Iniciar.";
+            statusTxt.innerText = "Cámara lista.";
           };
         } catch (err) {
-          statusTxt.innerText = "Error al acceder a la cámara: " + err.message;
+          statusTxt.innerText = "Error de cámara: " + err.message;
         }
       }
 
@@ -193,20 +200,19 @@
 
         ctx.drawImage(
           tempCanvas,
-          centerX, 0, SLICE_WIDTH, tempCanvas.height, // Origen (Centro del video)
-          xpos, 0, SLICE_WIDTH, pano.height          // Destino (Lienzo panorama)
+          centerX, 0, SLICE_WIDTH, tempCanvas.height,
+          xpos, 0, SLICE_WIDTH, pano.height
         );
 
         xpos += SLICE_WIDTH;
         
-        // Actualizar barra de progreso visual
         const percent = (xpos / pano.width) * 100;
         progress.style.width = `${percent}%`;
 
         if (xpos >= pano.width) {
           running = false;
           videoWrapper.classList.remove("scanning");
-          statusTxt.innerText = "¡Escaneo completado!";
+          statusTxt.innerText = "¡Completado!";
           return;
         }
 
@@ -214,7 +220,7 @@
       }
 
       document.getElementById("startBtn").onclick = () => {
-        if (!video.videoWidth) return; // Evitar iniciar si la cámara no cargó
+        if (!video.videoWidth) return;
 
         if (xpos >= pano.width || !running) {
           if (xpos >= pano.width) {
@@ -224,7 +230,7 @@
           }
           running = true;
           videoWrapper.classList.add("scanning");
-          statusTxt.innerText = "Escaneando... Mueve la cámara despacio.";
+          statusTxt.innerText = "Escaneando...";
           captureSlice();
         }
       };
@@ -232,7 +238,7 @@
       document.getElementById("stopBtn").onclick = () => {
         running = false;
         videoWrapper.classList.remove("scanning");
-        statusTxt.innerText = "Escaneo pausado.";
+        statusTxt.innerText = "Pausado.";
       };
 
       document.getElementById("saveBtn").onclick = () => {
@@ -242,7 +248,6 @@
         a.click();
       };
 
-      // Inicializar
       startCamera();
     </script>
   </body>
