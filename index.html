@@ -16,10 +16,15 @@
       .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
       button { padding: 8px 16px; border: none; border-radius: 5px; background-color: #2c2c2e; color: white; font-weight: bold; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; }
       button:hover { background-color: #3a3a3c; }
+      
+      /* Botón unificado con estados */
       #startBtn { background-color: #34c759; color: black; }
       #startBtn:hover { background-color: #2cd052; }
-      #stopBtn { background-color: #ff3b30; }
-      #stopBtn:hover { background-color: #ff453a; }
+      #startBtn.running { background-color: #ff3b30; color: white; }
+      #startBtn.running:hover { background-color: #ff453a; }
+      
+      #speedBtn { background-color: #ff9500; color: black; }
+      #speedBtn:hover { background-color: #ffaa33; }
       #switchBtn { background-color: #007aff; }
       #switchBtn:hover { background-color: #0a84ff; }
       .status-panel { font-size: 0.85rem; color: #aaa; text-align: center; width: 90vw; max-width: 500px; }
@@ -39,7 +44,7 @@
 
     <div class="controls">
       <button id="startBtn">Iniciar</button>
-      <button id="stopBtn">Detener</button>
+      <button id="speedBtn">Ancho: 2px</button>
       <button id="switchBtn">Cámara</button>
       <button id="saveBtn">Guardar</button>
     </div>
@@ -60,11 +65,16 @@
       const ctx = pano.getContext("2d", { alpha: false });
       const statusTxt = document.getElementById("statusTxt");
       const progress = document.getElementById("progress");
+      const startBtn = document.getElementById("startBtn");
+      const speedBtn = document.getElementById("speedBtn");
 
       let running = false;
       let xpos = 0;
       
-      const SLICE_WIDTH = 2; 
+      // Configuración de anchos de banda (Velocidad)
+      const speeds = [1, 2, 4, 10];
+      let speedIndex = 1; // Inicia en 2 (índice 1)
+      let sliceWidth = speeds[speedIndex]; 
 
       let currentStream = null;
       let videoDevices = [];
@@ -126,26 +136,41 @@
         }
       }
 
+      function updateStartButtonState(isRunning) {
+        if (isRunning) {
+          startBtn.innerText = "Parar";
+          startBtn.classList.add("running");
+        } else {
+          startBtn.innerText = "Iniciar";
+          startBtn.classList.remove("running");
+        }
+      }
+
+      function stopScanning(message = "Pausado.") {
+        running = false;
+        videoWrapper.classList.remove("scanning");
+        statusTxt.innerText = message;
+        updateStartButtonState(false);
+      }
+
       function captureSlice() {
         if (!running) return;
 
-        const centerX = Math.floor(video.videoWidth / 2 - SLICE_WIDTH / 2);
+        const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
         ctx.drawImage(
           video,
-          centerX, 0, SLICE_WIDTH, video.videoHeight,
-          xpos, 0, SLICE_WIDTH, pano.height
+          centerX, 0, sliceWidth, video.videoHeight,
+          xpos, 0, sliceWidth, pano.height
         );
 
-        xpos += SLICE_WIDTH;
+        xpos += sliceWidth;
         
         const percent = (xpos / pano.width) * 100;
         progress.style.width = `${percent}%`;
 
         if (xpos >= pano.width) {
-          running = false;
-          videoWrapper.classList.remove("scanning");
-          statusTxt.innerText = "¡Completado!";
+          stopScanning("¡Completado!");
           return;
         }
 
@@ -153,9 +178,16 @@
       }
 
       // --- CONTROLES ---
-      document.getElementById("startBtn").onclick = () => {
+      
+      // Botón único Iniciar / Parar (Toggle)
+      startBtn.onclick = () => {
         if (!video.videoWidth) return;
-        if (xpos >= pano.width || !running) {
+
+        if (running) {
+          // Si está corriendo, se detiene
+          stopScanning();
+        } else {
+          // Si está detenido, inicia o reinicia
           if (xpos >= pano.width) {
             xpos = 0;
             ctx.fillStyle = "black";
@@ -164,14 +196,16 @@
           running = true;
           videoWrapper.classList.add("scanning");
           statusTxt.innerText = "Escaneando...";
+          updateStartButtonState(true);
           captureSlice();
         }
       };
 
-      document.getElementById("stopBtn").onclick = () => {
-        running = false;
-        videoWrapper.classList.remove("scanning");
-        statusTxt.innerText = "Pausado.";
+      // Botón de velocidad (Ancho de banda)
+      speedBtn.onclick = () => {
+        speedIndex = (speedIndex + 1) % speeds.length;
+        sliceWidth = speeds[speedIndex];
+        speedBtn.innerText = `Ancho: ${sliceWidth}px`;
       };
 
       document.getElementById("switchBtn").onclick = () => {
@@ -179,8 +213,7 @@
           statusTxt.innerText = "No hay más cámaras.";
           return;
         }
-        running = false;
-        videoWrapper.classList.remove("scanning");
+        stopScanning();
         currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
         initCamera();
       };
