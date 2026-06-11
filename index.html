@@ -157,13 +157,16 @@
         maskCanvas.height = 720;
         const mctx = maskCanvas.getContext('2d');
 
+        ctx.imageSmoothingEnabled = false;
+        mctx.imageSmoothingEnabled = false;
+
         let grad = mctx.createLinearGradient(0, 0, sliceWidth, 0);
         grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.5, 'rgba(0,0,0,1)');
 
         function captureSlice() {
             if (!running) return;
 
-            const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
+            const centerX = ((video.videoWidth / 2 - sliceWidth / 2) | 0);
 
             if (sliceWidth <= 24) { // límite de ancho para el pisado con alfa... 4 o más
                 ctx.drawImage(
