@@ -165,14 +165,12 @@
         function captureSlice() {
             if (!running) return;
 
-            // esperar frame real del video (clave del fix)
             video.requestVideoFrameCallback(onFrame);
         }
 
         function onFrame(now, metadata) {
             if (!running) return;
 
-            // evitar duplicación de frames
             if (metadata.mediaTime === lastVideoTime) {
                 requestAnimationFrame(captureSlice);
                 return;
@@ -181,7 +179,7 @@
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
-            if (sliceWidth <= 24) {
+            if (sliceWidth <= 8) {
 
                 ctx.drawImage(
                     video,
