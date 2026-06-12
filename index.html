@@ -43,11 +43,12 @@
         <div class="slit-guide"></div>
     </div>
 
-    <div class="controls">
-        <button id="toggleBtn">Iniciar</button>
-        <button id="speedBtn">2 px</button>
-        <button id="saveBtn">Guardar</button>
-    </div>
+<div class="controls">
+    <button id="toggleBtn">Iniciar</button>
+    <button id="speedBtn">2 px</button>
+    <button id="stabBtn" style="background-color: #007aff; color: white;">Estable</button>
+    <button id="saveBtn">Guardar</button>
+</div>
 
     <div class="status-panel">
         <span id="statusTxt">Cargando cámara...</span>
@@ -67,6 +68,7 @@
         const progress = document.getElementById("progress");
         const speedBtn = document.getElementById("speedBtn");
         const toggleBtn = document.getElementById("toggleBtn");
+        const stabBtn = document.getElementById("stabBtn");
 
         let running = false;
         let xpos = 0;
@@ -74,6 +76,14 @@
         const speeds = [1, 2, 4, 8, 16];
         let speedIndex = 1; // 2 pixeles
         let sliceWidth = speeds[speedIndex];
+
+        // --- VARIABLES PARA ESTABILIZACIÓN ---
+        let stabilizing = true;
+        let lastSliceData = null; 
+        let accumulatedY = 0;
+        
+        const hiddenCanvas = document.createElement("canvas");
+        const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
 
         async function startCamera() {
             try {
@@ -90,6 +100,9 @@
                     pano.height = video.videoHeight;
                     ctx.fillStyle = "black";
                     ctx.fillRect(0, 0, pano.width, pano.height);
+                    
+                    hiddenCanvas.height = video.videoHeight;
+
                     statusTxt.innerText = "Cámara lista.";
                 };
             } catch (err) {
@@ -97,15 +110,58 @@
             }
         }
 
+        // Algoritmo SAD (Sum of Absolute Differences) para buscar el mejor encaje vertical
+        function getVerticalOffset(newData, oldData, width, height) {
+            if (!oldData) return 0;
+
+            let bestOffset = 0;
+            let minDifference = Infinity;
+            const searchRange = 12;
+
+            for (let offset = -searchRange; offset <= searchRange; offset++) {
+                let currentDifference = 0;
+
+                for (let y = searchRange; y < height - searchRange; y += 2) {
+                    const currentIdx = (y * width + Math.floor(width / 2)) * 4;
+                    const oldIdx = ((y + offset) * width + Math.floor(width / 2)) * 4;
+
+                    const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]);
+                    currentDifference += diff;
+                }
+
+                if (currentDifference < minDifference) {
+                    minDifference = currentDifference;
+                    bestOffset = offset;
+                }
+            }
+
+            return bestOffset;
+        }
+
         function captureSlice() {
             if (!running) return;
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
+            hiddenCanvas.width = sliceWidth;
+            hiddenCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+            const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
+
+            if (stabilizing) {
+                const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
+                accumulatedY += offset;
+
+                const maxDrift = video.videoHeight * 0.15;
+                if (accumulatedY > maxDrift) accumulatedY = maxDrift;
+                if (accumulatedY < -maxDrift) accumulatedY = -maxDrift;
+            } else { accumulatedY = 0; }
+
+            lastSliceData = currentSliceImageData.data;
+
             ctx.drawImage(
-                video,
-                centerX, 0, sliceWidth, video.videoHeight,
-                xpos, 0, sliceWidth, pano.height
+                hiddenCanvas,
+                0, 0, sliceWidth, video.videoHeight,
+                xpos, accumulatedY, sliceWidth, pano.height
             );
 
             xpos += sliceWidth;
@@ -139,6 +195,8 @@
 
             if (xpos >= pano.width) {
                 xpos = 0;
+                accumulatedY = 0;
+                lastSliceData = null;
                 progress.style.width = "0%";
                 ctx.fillStyle = "black";
                 ctx.fillRect(0, 0, pano.width, pano.height);
@@ -157,10 +215,23 @@
             speedIndex = (speedIndex + 1) % speeds.length;
             sliceWidth = speeds[speedIndex];
             speedBtn.innerText = `${sliceWidth} px`;
+            lastSliceData = null; 
+        };
+
+         stabBtn.onclick = () => {
+            stabilizing = !stabilizing;
+            if (stabilizing) {
+                stabBtn.innerText = "Estable";
+                stabBtn.style.backgroundColor = "#007aff";
+            } else {
+                stabBtn.innerText = "Crudo";
+                stabBtn.style.backgroundColor = "#48484a";
+                accumulatedY = 0; 
+                lastSliceData = null;
+            }
         };
 
         document.getElementById("saveBtn").onclick = () => {
-       
             const timestamp = () =>
                 new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
 
