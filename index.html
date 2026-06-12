@@ -45,7 +45,7 @@
 
 <div class="controls">
     <button id="toggleBtn">Iniciar</button>
-    <button id="speedBtn">2 px</button>
+    <button id="speedBtn">4 px</button>
     <button id="stabBtn" style="background-color: #007aff; color: white;">Estable</button>
     <button id="saveBtn">Guardar</button>
 </div>
@@ -80,13 +80,11 @@
         // --- VARIABLES PARA ESTABILIZACIÓN ---
         let stabilizing = true;
         let lastSliceData = null; 
-        
-        // Margen de juego vertical (40px arriba y 40px abajo para evitar el corte del techo)
         const verticalMargin = 40; 
         let accumulatedY = verticalMargin;
         const springFactor = 0.05; 
 
-        // Canvas oculto para extraer los píxeles de la tira de video actual
+        // Canvas oculto para extraer los píxeles de la tira de video actual -estabilización-
         const hiddenCanvas = document.createElement("canvas");
         const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
 
@@ -102,7 +100,7 @@
                 video.srcObject = stream;
 
                 video.onloadedmetadata = () => {
-                    pano.height = video.videoHeight + (verticalMargin * 2);
+                    pano.height = video.videoHeight;
                     ctx.fillStyle = "black";
                     ctx.fillRect(0, 0, pano.width, pano.height);
                     
@@ -157,17 +155,10 @@
             if (stabilizing) {
                 const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
                 accumulatedY += offset;
-
-                // --- EFECTO RESORTE ---
-                // Aplica una fuerza que atrae la tira de vuelta a la posición 'verticalMargin'
                 accumulatedY += (verticalMargin - accumulatedY) * springFactor;
-
-                // Límites de seguridad basados en el margen
                 if (accumulatedY < 0) accumulatedY = 0;
                 if (accumulatedY > verticalMargin * 2) accumulatedY = verticalMargin * 2;
-            } else {
-                accumulatedY = verticalMargin; // Si está apagado, dibuja fijo en la posición del margen
-            }
+            } else { accumulatedY = verticalMargin; }
 
             // 3. Guardar la tira actual para la próxima comparación
             lastSliceData = currentSliceImageData.data;
@@ -190,6 +181,7 @@
                 statusTxt.innerText = "¡Completado!";
                 toggleBtn.innerText = "Iniciar";
                 toggleBtn.classList.remove("running");
+                hacerSonidoExito();
                 return;
             }
 
@@ -242,7 +234,7 @@
             } else {
                 stabBtn.innerText = "Estabilizar: OFF";
                 stabBtn.style.backgroundColor = "#48484a";
-                accumulatedY = verticalMargin; // Vuelve a la alineación por defecto
+                accumulatedY = verticalMargin;
                 lastSliceData = null;
             }
         };
@@ -258,6 +250,21 @@
             a.download = nombreArchivo;
             a.click();
         };
+
+        function hacerSonidoExito() {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = 'sine'; // Onda senoidal, un pitido limpio estilo "retro"
+            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); // Nota Re5 (D5)
+            oscillator.frequency.setValueAtTime(880.00, audioCtx.currentTime + 0.1); // Nota La5 (A5) a los 100ms
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); // Volumen al 20%
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3); // Desvanece en 300ms
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        }
 
         startCamera();
     </script>
