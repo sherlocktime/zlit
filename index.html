@@ -20,13 +20,12 @@
       @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
       .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
       button { padding: 8px 16px; border: none; border-radius: 5px; background-color: #2c2c2e; color: white; font-weight: bold; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; }
-      button:hover { background-color: #3a3a3c; }
+      button:active { opacity: 0.7; }
       #toggleBtn { background-color: #34c759; color: black; }
-      #toggleBtn:hover { background-color: #2cd052; }
       #toggleBtn.running { background-color: #ff3b30; color: white; }
       #toggleBtn.running:hover { background-color: #ff453a; }
       #speedBtn { background-color: #ff9500; color: black; }
-      #speedBtn:hover { background-color: #ffaa33; }
+      #saveBtn { background-color: #7a4fc5; color: black; }
       .status-panel { font-size: 0.85rem; color: #aaa; text-align: center; width: 90vw; max-width: 500px; }
       .progress-bar { width: 100%; height: 5px; background-color: #222; border-radius: 3px; overflow: hidden; }
       #progress { width: 0%; height: 100%; background-color: #007aff; transition: width 0.1s linear; }
@@ -113,21 +112,19 @@
             }
         }
 
-        // Algoritmo SAD optimizado
+         // Algoritmo SAD (Sum of Absolute Differences) para buscar el mejor encaje vertical
         function getVerticalOffset(newData, oldData, width, height) {
             if (!oldData) return 0;
 
             let bestOffset = 0;
             let minDifference = Infinity;
-            const searchRange = 10; // Reducido un poco para ganar velocidad (-10 a +10 px)
+            const searchRange = 10;
             
-            // Usamos siempre la columna 0 para simplificar la matemática
             const xCoord = 0; 
 
             for (let offset = -searchRange; offset <= searchRange; offset++) {
                 let currentDifference = 0;
 
-                // Saltamos de a 3 píxeles (y += 3) para procesar un 66% menos de datos (Rendimiento 🔥)
                 for (let y = searchRange; y < height - searchRange; y += 3) {
                     const currentIdx = (y * width + xCoord) * 4;
                     const oldIdx = ((y + offset) * width + xCoord) * 4;
@@ -172,7 +169,7 @@
             ctx.drawImage(
                 hiddenCanvas,
                 0, 0, sliceWidth, video.videoHeight,
-                xpos, accumulatedY, sliceWidth, pano.height- (verticalMargin * 2)
+                xpos, accumulatedY, sliceWidth, pano.height - (verticalMargin * 2)
             );
 
             xpos += sliceWidth;
@@ -207,7 +204,7 @@
 
             if (xpos >= pano.width) {
                 xpos = 0;
-                accumulatedY = verticalMargin; // Resetea al centro del margen
+                accumulatedY = verticalMargin;
                 lastSliceData = null;
                 progress.style.width = "0%";
                 ctx.fillStyle = "black";
@@ -230,7 +227,6 @@
             lastSliceData = null; 
         };
 
-        // Control del botón de estabilización
         stabBtn.onclick = () => {
             stabilizing = !stabilizing;
             if (stabilizing) {
