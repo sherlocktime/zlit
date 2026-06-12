@@ -4,7 +4,11 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Slit Scan</title>
+    <title>Rendija Slit Scan</title>
+
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#121212" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
 
     <style>
       body { margin: 0; background: #121212; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 15px; box-sizing: border-box; min-height: 100vh; }
@@ -32,7 +36,7 @@
 
 <body>
 
-    <h2>Slit Scan</h2>
+    <h2>Rendija Slit Scan</h2>
 
     <div class="video-container" id="videoWrapper">
         <video id="video" autoplay playsinline muted></video>
@@ -71,6 +75,14 @@
         let speedIndex = 1; // 2 pixeles
         let sliceWidth = speeds[speedIndex];
 
+        // --- VARIABLES PARA ESTABILIZACIÓN ---
+        let lastSliceData = null; 
+        let accumulatedY = 0;     // Desviación vertical acumulada
+        
+        // Canvas oculto para extraer los píxeles de la tira de video actual
+        const hiddenCanvas = document.createElement("canvas");
+        const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -86,6 +98,10 @@
                     pano.height = video.videoHeight;
                     ctx.fillStyle = "black";
                     ctx.fillRect(0, 0, pano.width, pano.height);
+                    
+                    // Inicializar tamaño del canvas oculto (solo guardará el ancho de la rendija)
+                    hiddenCanvas.height = video.videoHeight;
+
                     statusTxt.innerText = "Cámara lista.";
                 };
             } catch (err) {
@@ -93,15 +109,67 @@
             }
         }
 
+        // Algoritmo SAD (Sum of Absolute Differences) para buscar el mejor encaje vertical
+        function getVerticalOffset(newData, oldData, width, height) {
+            if (!oldData) return 0;
+
+            let bestOffset = 0;
+            let minDifference = Infinity;
+            const searchRange = 12; // Rango de píxeles hacia arriba y abajo (-12 a +12)
+
+            // Probamos cada desplazamiento posible en el eje Y
+            for (let offset = -searchRange; offset <= searchRange; offset++) {
+                let currentDifference = 0;
+
+                // Muestreamos saltándonos los extremos para evitar errores de desborde
+                for (let y = searchRange; y < height - searchRange; y += 2) {
+                    // Tomamos el píxel central de la tira
+                    const currentIdx = (y * width + Math.floor(width / 2)) * 4;
+                    const oldIdx = ((y + offset) * width + Math.floor(width / 2)) * 4;
+
+                    // Comparamos intensidad usando el canal verde (el ojo humano es más sensible a él)
+                    const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]);
+                    currentDifference += diff;
+                }
+
+                if (currentDifference < minDifference) {
+                    minDifference = currentDifference;
+                    bestOffset = offset;
+                }
+            }
+
+            return bestOffset;
+        }
+
         function captureSlice() {
             if (!running) return;
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
+            // 1. Dibujar la tira actual en nuestro canvas oculto para procesar sus píxeles
+            hiddenCanvas.width = sliceWidth;
+            hiddenCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+            const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
+
+            // 2. Calcular cuánto se movió la cámara respecto al frame anterior
+            const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
+            
+            // Acumulamos el movimiento para corregirlo
+            accumulatedY += offset;
+
+            // Evitamos que la corrección mueva la imagen completamente fuera del canvas
+            const maxDrift = video.videoHeight * 0.15; // Límite del 15% de la altura
+            if (accumulatedY > maxDrift) accumulatedY = maxDrift;
+            if (accumulatedY < -maxDrift) accumulatedY = -maxDrift;
+
+            // 3. Guardar la tira actual como referencia para el próximo frame
+            lastSliceData = currentSliceImageData.data;
+
+            // 4. Dibujar la tira en el canvas principal aplicando la corrección en el eje Y
             ctx.drawImage(
-                video,
-                centerX, 0, sliceWidth, video.videoHeight,
-                xpos, 0, sliceWidth, pano.height
+                hiddenCanvas,
+                0, 0, sliceWidth, video.videoHeight,
+                xpos, accumulatedY, sliceWidth, pano.height
             );
 
             xpos += sliceWidth;
@@ -135,6 +203,8 @@
 
             if (xpos >= pano.width) {
                 xpos = 0;
+                accumulatedY = 0;
+                lastSliceData = null;
                 progress.style.width = "0%";
                 ctx.fillStyle = "black";
                 ctx.fillRect(0, 0, pano.width, pano.height);
@@ -153,10 +223,10 @@
             speedIndex = (speedIndex + 1) % speeds.length;
             sliceWidth = speeds[speedIndex];
             speedBtn.innerText = `${sliceWidth} px`;
+            lastSliceData = null; // Reiniciar historial de píxeles al cambiar de tamaño
         };
 
         document.getElementById("saveBtn").onclick = () => {
-        
             const timestamp = () =>
                 new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
 
