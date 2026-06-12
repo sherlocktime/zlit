@@ -80,7 +80,9 @@
         // --- VARIABLES PARA ESTABILIZACIÓN ---
         let stabilizing = true;
         let lastSliceData = null; 
-        let accumulatedY = 0;
+
+        const verticalMargin = 40; 
+        let accumulatedY = verticalMargin;
         
         const hiddenCanvas = document.createElement("canvas");
         const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
@@ -151,10 +153,9 @@
                 const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
                 accumulatedY += offset;
 
-                const maxDrift = video.videoHeight * 0.15;
-                if (accumulatedY > maxDrift) accumulatedY = maxDrift;
-                if (accumulatedY < -maxDrift) accumulatedY = -maxDrift;
-            } else { accumulatedY = 0; }
+                if (accumulatedY < 0) accumulatedY = 0;
+                    if (accumulatedY > verticalMargin * 2) accumulatedY = verticalMargin * 2;
+                } else { accumulatedY = verticalMargin; }
 
             lastSliceData = currentSliceImageData.data;
 
@@ -195,7 +196,7 @@
 
             if (xpos >= pano.width) {
                 xpos = 0;
-                accumulatedY = 0;
+                accumulatedY = verticalMargin;
                 lastSliceData = null;
                 progress.style.width = "0%";
                 ctx.fillStyle = "black";
