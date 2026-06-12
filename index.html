@@ -113,21 +113,26 @@
             }
         }
 
-        // Algoritmo SAD (Sum of Absolute Differences) para buscar el mejor encaje vertical
+        // Algoritmo SAD optimizado
         function getVerticalOffset(newData, oldData, width, height) {
             if (!oldData) return 0;
 
             let bestOffset = 0;
             let minDifference = Infinity;
-            const searchRange = 12; // Rango de búsqueda vertical (-12 a +12 píxeles)
+            const searchRange = 10; // Reducido un poco para ganar velocidad (-10 a +10 px)
+            
+            // Usamos siempre la columna 0 para simplificar la matemática
+            const xCoord = 0; 
 
             for (let offset = -searchRange; offset <= searchRange; offset++) {
                 let currentDifference = 0;
 
-                for (let y = searchRange; y < height - searchRange; y += 2) {
-                    const currentIdx = (y * width + Math.floor(width / 2)) * 4;
-                    const oldIdx = ((y + offset) * width + Math.floor(width / 2)) * 4;
+                // Saltamos de a 3 píxeles (y += 3) para procesar un 66% menos de datos (Rendimiento 🔥)
+                for (let y = searchRange; y < height - searchRange; y += 3) {
+                    const currentIdx = (y * width + xCoord) * 4;
+                    const oldIdx = ((y + offset) * width + xCoord) * 4;
 
+                    // Comparamos el canal Verde [idx + 1], que es el que tiene más detalle y menos ruido
                     const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]);
                     currentDifference += diff;
                 }
@@ -167,7 +172,7 @@
             ctx.drawImage(
                 hiddenCanvas,
                 0, 0, sliceWidth, video.videoHeight,
-                xpos, accumulatedY, sliceWidth, pano.height
+                xpos, accumulatedY, sliceWidth, pano.height- (verticalMargin * 2)
             );
 
             xpos += sliceWidth;
@@ -181,7 +186,7 @@
                 statusTxt.innerText = "¡Completado!";
                 toggleBtn.innerText = "Iniciar";
                 toggleBtn.classList.remove("running");
-                hacerSonidoExito();
+                hacerRuido();
                 return;
             }
 
@@ -251,17 +256,17 @@
             a.click();
         };
 
-        function hacerSonidoExito() {
+        function hacerRuido() {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             oscillator.connect(gainNode);
             gainNode.connect(audioCtx.destination);
-            oscillator.type = 'sine'; // Onda senoidal, un pitido limpio estilo "retro"
-            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); // Nota Re5 (D5)
-            oscillator.frequency.setValueAtTime(880.00, audioCtx.currentTime + 0.1); // Nota La5 (A5) a los 100ms
-            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); // Volumen al 20%
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3); // Desvanece en 300ms
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(880.00, audioCtx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
             oscillator.start(audioCtx.currentTime);
             oscillator.stop(audioCtx.currentTime + 0.3);
         }
