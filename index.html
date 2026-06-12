@@ -60,7 +60,7 @@
     <canvas id="panorama" width="4000" height="400"></canvas>
 
     <script>
-        const video = document.getElementById("video");
+const video = document.getElementById("video");
         const videoWrapper = document.getElementById("videoWrapper");
         const pano = document.getElementById("panorama");
         const ctx = pano.getContext("2d", { alpha: false });
@@ -80,10 +80,11 @@
         // --- VARIABLES PARA ESTABILIZACIÓN ---
         let stabilizing = true;
         let lastSliceData = null; 
-
-        const verticalMargin = 40; 
-        let accumulatedY = verticalMargin;
         
+        const verticalMargin = 40; 
+        let accumulatedY = verticalMargin; // Arranca centrado en el margen
+        
+        // Canvas oculto para extraer los píxeles de la tira de video actual
         const hiddenCanvas = document.createElement("canvas");
         const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
 
@@ -154,8 +155,10 @@
                 accumulatedY += offset;
 
                 if (accumulatedY < 0) accumulatedY = 0;
-                    if (accumulatedY > verticalMargin * 2) accumulatedY = verticalMargin * 2;
-                } else { accumulatedY = verticalMargin; }
+                if (accumulatedY > verticalMargin * 2) accumulatedY = verticalMargin * 2;
+            } else {
+                accumulatedY = verticalMargin;
+            }
 
             lastSliceData = currentSliceImageData.data;
 
@@ -219,7 +222,7 @@
             lastSliceData = null; 
         };
 
-         stabBtn.onclick = () => {
+        stabBtn.onclick = () => {
             stabilizing = !stabilizing;
             if (stabilizing) {
                 stabBtn.innerText = "Estable";
@@ -227,7 +230,7 @@
             } else {
                 stabBtn.innerText = "Crudo";
                 stabBtn.style.backgroundColor = "#48484a";
-                accumulatedY = 0; 
+                accumulatedY = verticalMargin;
                 lastSliceData = null;
             }
         };
