@@ -260,6 +260,25 @@
             oscillator.stop(audioCtx.currentTime + 0.3);
         }
 
+        // --- LÓGICA DE DOBLE TAP EXCLUSIVA PARA MÓVILES ---
+        let ultimoToque = 0;
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch((err) => {
+                    statusTxt.innerText = "Fullscreen no soportado o denegado."; });
+            } else { document.exitFullscreen(); } }
+
+        document.addEventListener("touchstart", (e) => {
+            if (e.target.tagName === 'BUTTON') return;
+            const ahora = new Date().getTime();
+            const diferencia = ahora - ultimoToque;
+           
+            if (diferencia < 300 && diferencia > 0) {
+                e.preventDefault(); toggleFullscreen(); }
+            ultimoToque = ahora; }, { passive: false }); 
+
+
         startCamera();
     </script>
 </body>
