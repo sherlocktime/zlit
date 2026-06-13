@@ -20,13 +20,14 @@
         .slit-guide { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background-color: var(--accent); transform: translateX(-50%); box-shadow: 0 0 8px var(--accent); pointer-events: none; display: none; }
         .scanning .slit-guide { display: block; animation: pulse 1s infinite; }
         @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
-        .controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; max-width: 400px; }
+        .controls { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; width: 100%; max-width: 400px; }
+        .controls button { grid-column: span 3; }
         button { font-family: inherit; font-weight: 600; color: var(--text); background: var(--btn-bg); border: 1px solid var(--border); height: 46px; border-radius: 10px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: background 0.15s, transform 0.1s, border-color 0.15s, color 0.15s; }
         button:active { transform: scale(0.97); background: var(--btn-hover); }
         #toggleBtn { font-size: 1.25rem; }
         #toggleBtn.running { color: var(--accent); border-color: rgba(255, 204, 0, 0.3); background: rgba(255, 204, 0, 0.08); }
-        #stabBtn.raw { color: var(--muted); opacity: 0.6; }
         #saveBtn { background: rgba(255, 255, 255, 0.12); }
+        #speedBtn, #stabBtn, #camBtn { grid-column: span 2; }
         .status-panel { font-size: 11px; color: var(--muted); text-align: center; width: 100%; max-width: 400px; }
         .progress-bar { width: 100%; height: 4px; background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
         #progress { width: 0%; height: 100%; background-color: var(--accent); transition: width 0.1s linear; }
@@ -45,9 +46,10 @@
 
     <div class="controls">
         <button id="toggleBtn">▶</button>
+        <button id="saveBtn">Guardar</button>
         <button id="speedBtn">4 px</button>
         <button id="stabBtn">Estable</button>
-        <button id="saveBtn">Guardar</button>
+        <button id="camBtn">Entorno</button>
     </div>
 
     <div class="status-panel">
@@ -69,44 +71,59 @@
         const speedBtn = document.getElementById("speedBtn");
         const toggleBtn = document.getElementById("toggleBtn");
         const stabBtn = document.getElementById("stabBtn");
+        const camBtn = document.getElementById("camBtn");
 
+        let facingMode = "environment";
+        let currentStream = null;
         let running = false;
         let xpos = 0;
 
         const speeds = [1, 2, 4, 8, 16];
-        let speedIndex = 2; 
+        let speedIndex = 2;
         let sliceWidth = speeds[speedIndex];
 
         // --- VARIABLES PARA ESTABILIZACIÓN ---
         let stabilizing = true;
-        let lastSliceData = null; 
-        const verticalMargin = 40; 
+        let lastSliceData = null;
+        const verticalMargin = 40;
         let accumulatedY = verticalMargin;
-        const springFactor = 0.05; 
+        const springFactor = 0.05;
 
         const hiddenCanvas = document.createElement("canvas");
         const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
 
+
         async function startCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
+
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                currentStream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        facingMode: "environment",
+                        facingMode,
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
-                    },
+                    }
                 });
-                video.srcObject = stream;
+
+                video.srcObject = currentStream;
 
                 video.onloadedmetadata = () => {
                     pano.height = video.videoHeight;
+
                     ctx.fillStyle = "black";
                     ctx.fillRect(0, 0, pano.width, pano.height);
-                    
+
                     hiddenCanvas.height = video.videoHeight;
 
-                    statusTxt.innerText = "Cámara lista.";
+                    statusTxt.innerText =
+                        facingMode === "environment"
+                            ? "Cámara trasera."
+                            : "Cámara frontal.";
                 };
+
             } catch (err) {
                 statusTxt.innerText = "Error de cámara: " + err.message;
             }
@@ -118,7 +135,7 @@
             let bestOffset = 0;
             let minDifference = Infinity;
             const searchRange = 10;
-            const xCoord = 0; 
+            const xCoord = 0;
 
             for (let offset = -searchRange; offset <= searchRange; offset++) {
                 let currentDifference = 0;
@@ -217,20 +234,27 @@
             speedIndex = (speedIndex + 1) % speeds.length;
             sliceWidth = speeds[speedIndex];
             speedBtn.innerText = `${sliceWidth} px`;
-            lastSliceData = null; 
+            lastSliceData = null;
         };
 
         stabBtn.onclick = () => {
             stabilizing = !stabilizing;
             if (stabilizing) {
                 stabBtn.innerText = "Estable";
-                stabBtn.classList.remove("raw");
             } else {
                 stabBtn.innerText = "Crudo";
-                stabBtn.classList.add("raw");
                 accumulatedY = verticalMargin;
                 lastSliceData = null;
             }
+        };
+
+        camBtn.onclick = async () => {
+            if (running) return;
+
+            facingMode = facingMode === "environment" ? "user" : "environment";
+            camBtn.innerText = facingMode === "environment" ? "Entorno" : "Usuario";
+
+            await startCamera();
         };
 
         document.getElementById("saveBtn").onclick = () => {
