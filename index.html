@@ -3,33 +3,34 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Rendija Slit Scan</title>
 
     <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#121212" />
+    <meta name="theme-color" content="#000000" />
     <link rel="apple-touch-icon" href="icon-192.png" />
 
     <style>
-      body { margin: 0; background: #121212; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 15px; box-sizing: border-box; min-height: 100vh; }
-      h2 { margin: 0; font-weight: 400; letter-spacing: 1px; font-size: 1.4rem; }
-      .video-container { position: relative; width: 45vw; max-width: 220px; border: 2px solid #333; border-radius: 6px; overflow: hidden; display: flex; background: #000; }
-      video { width: 100%; height: auto; display: block; }
-      .slit-guide { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background-color: #ff3b30; transform: translateX(-50%); box-shadow: 0 0 6px #ff3b30; pointer-events: none; display: none; }
-      .scanning .slit-guide { display: block; animation: pulse 1s infinite; }
-      @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
-      .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-      button { padding: 8px 16px; border: none; border-radius: 5px; background-color: #2c2c2e; color: white; font-weight: bold; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; }
-      button:active { opacity: 0.7; }
-      #toggleBtn { background-color: #34c759; color: black; }
-      #toggleBtn.running { background-color: #ff3b30; color: white; }
-      #toggleBtn.running:hover { background-color: #ff453a; }
-      #speedBtn { background-color: #ff9500; color: black; }
-      #saveBtn { background-color: #7a4fc5; color: black; }
-      .status-panel { font-size: 0.85rem; color: #aaa; text-align: center; width: 90vw; max-width: 500px; }
-      .progress-bar { width: 100%; height: 5px; background-color: #222; border-radius: 3px; overflow: hidden; }
-      #progress { width: 0%; height: 100%; background-color: #007aff; transition: width 0.1s linear; }
-      canvas { width: 95vw; max-width: 600px; height: auto; border: 2px solid #444; background: black; border-radius: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+        :root { --bg: #000000; --border: rgba(255, 255, 255, 0.08); --accent: #ffcc00; --text: #ffffff; --muted: #8e8e93; --btn-bg: rgba(255, 255, 255, 0.08); --btn-hover: rgba(255, 255, 255, 0.15); --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: calc(12px + env(safe-area-inset-top, 12px)) 16px calc(12px + env(safe-area-inset-bottom, 12px)); background: var(--bg); color: var(--text); font-family: var(--font-main); min-height: 100vh; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+        h2 { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; text-align: center; }
+        .video-container { position: relative; width: 45vw; max-width: 200px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; background: #000; }
+        video { width: 100%; height: auto; display: block; }
+        .slit-guide { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background-color: var(--accent); transform: translateX(-50%); box-shadow: 0 0 8px var(--accent); pointer-events: none; display: none; }
+        .scanning .slit-guide { display: block; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+        .controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; max-width: 400px; }
+        button { font-family: inherit; color: var(--text); background: var(--btn-bg); border: 1px solid var(--border); height: 46px; border-radius: 10px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: background 0.15s, transform 0.1s, border-color 0.15s, color 0.15s; }
+        button:active { transform: scale(0.97); background: var(--btn-hover); }
+        #toggleBtn { grid-column: span 2; font-weight: 600; }
+        #toggleBtn.running { color: var(--accent); border-color: rgba(255, 204, 0, 0.3); background: rgba(255, 204, 0, 0.08); }
+        #stabBtn.raw { color: var(--muted); opacity: 0.6; }
+        #saveBtn { grid-column: span 2; font-weight: 600; background: rgba(255, 255, 255, 0.12); }
+        .status-panel { font-size: 11px; color: var(--muted); text-align: center; width: 100%; max-width: 400px; }
+        .progress-bar { width: 100%; height: 4px; background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
+        #progress { width: 0%; height: 100%; background-color: var(--accent); transition: width 0.1s linear; }
+        canvas { width: 100%; max-width: 500px; height: auto; border: 1px solid var(--border); background: black; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7); }
     </style>
 </head>
 
@@ -42,16 +43,16 @@
         <div class="slit-guide"></div>
     </div>
 
-<div class="controls">
-    <button id="toggleBtn">Iniciar</button>
-    <button id="speedBtn">4 px</button>
-    <button id="stabBtn" style="background-color: #007aff; color: white;">Estable</button>
-    <button id="saveBtn">Guardar</button>
-</div>
+    <div class="controls">
+        <button id="toggleBtn">Iniciar</button>
+        <button id="speedBtn">4 px</button>
+        <button id="stabBtn">Estable</button>
+        <button id="saveBtn">Guardar Panorama</button>
+    </div>
 
     <div class="status-panel">
         <span id="statusTxt">Cargando cámara...</span>
-        <div class="progress-bar" style="margin-top: 6px;">
+        <div class="progress-bar" style="margin-top: 8px;">
             <div id="progress"></div>
         </div>
     </div>
@@ -73,7 +74,7 @@
         let xpos = 0;
 
         const speeds = [1, 2, 4, 8, 16];
-        let speedIndex = 2; // 4 pixeles
+        let speedIndex = 2; 
         let sliceWidth = speeds[speedIndex];
 
         // --- VARIABLES PARA ESTABILIZACIÓN ---
@@ -83,7 +84,6 @@
         let accumulatedY = verticalMargin;
         const springFactor = 0.05; 
 
-        // Canvas oculto para extraer los píxeles de la tira de video actual -estabilización-
         const hiddenCanvas = document.createElement("canvas");
         const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
 
@@ -112,14 +112,12 @@
             }
         }
 
-         // Algoritmo SAD (Sum of Absolute Differences) para buscar el mejor encaje vertical
         function getVerticalOffset(newData, oldData, width, height) {
             if (!oldData) return 0;
 
             let bestOffset = 0;
             let minDifference = Infinity;
             const searchRange = 10;
-            
             const xCoord = 0; 
 
             for (let offset = -searchRange; offset <= searchRange; offset++) {
@@ -129,7 +127,6 @@
                     const currentIdx = (y * width + xCoord) * 4;
                     const oldIdx = ((y + offset) * width + xCoord) * 4;
 
-                    // Comparamos el canal Verde [idx + 1], que es el que tiene más detalle y menos ruido
                     const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]);
                     currentDifference += diff;
                 }
@@ -148,12 +145,10 @@
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
-            // 1. Dibujar la tira actual en el canvas oculto
             hiddenCanvas.width = sliceWidth;
             hiddenCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
             const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
 
-            // 2. Aplicar estabilización condicional con límites centrados
             if (stabilizing) {
                 const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
                 accumulatedY += offset;
@@ -162,10 +157,8 @@
                 if (accumulatedY > verticalMargin * 2) accumulatedY = verticalMargin * 2;
             } else { accumulatedY = verticalMargin; }
 
-            // 3. Guardar la tira actual para la próxima comparación
             lastSliceData = currentSliceImageData.data;
 
-            // 4. Dibujar en el canvas principal aplicando el desplazamiento Y corregido
             ctx.drawImage(
                 hiddenCanvas,
                 0, 0, sliceWidth, video.videoHeight,
@@ -231,10 +224,10 @@
             stabilizing = !stabilizing;
             if (stabilizing) {
                 stabBtn.innerText = "Estable";
-                stabBtn.style.backgroundColor = "#007aff";
+                stabBtn.classList.remove("raw");
             } else {
                 stabBtn.innerText = "Crudo";
-                stabBtn.style.backgroundColor = "#48484a";
+                stabBtn.classList.add("raw");
                 accumulatedY = verticalMargin;
                 lastSliceData = null;
             }
@@ -271,4 +264,4 @@
     </script>
 </body>
 
-</html> 
+</html>
