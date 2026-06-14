@@ -48,7 +48,7 @@
         <button id="toggleBtn">▶</button>
         <button id="saveBtn">Guardar</button>
         <button id="speedBtn">4 px</button>
-        <button id="stabBtn">Estable</button>
+        <button id="stabBtn">Rápido</button>
         <button id="camBtn">Entorno</button>
     </div>
 
@@ -83,7 +83,7 @@
         let sliceWidth = speeds[speedIndex];
 
         // --- VARIABLES PARA ESTABILIZACIÓN ---
-        let stabilizing = true;
+        let stabilizing = false;
         let lastSliceData = null;
         const verticalMargin = 40;
         let accumulatedY = verticalMargin;
@@ -243,7 +243,7 @@
             if (stabilizing) {
                 stabBtn.innerText = "Estable";
             } else {
-                stabBtn.innerText = "Crudo";
+                stabBtn.innerText = "Rápido";
                 accumulatedY = verticalMargin;
                 lastSliceData = null;
             }
