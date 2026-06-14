@@ -131,7 +131,6 @@
 
         function getVerticalOffset(newData, oldData, width, height) {
             if (!oldData) return 0;
-
             let bestOffset = 0;
             let minDifference = Infinity;
             const searchRange = 10;
@@ -139,21 +138,17 @@
 
             for (let offset = -searchRange; offset <= searchRange; offset++) {
                 let currentDifference = 0;
-
-                for (let y = searchRange; y < height - searchRange; y += 3) {
+                for (let y = searchRange; y < height - searchRange; y += 8) { 
                     const currentIdx = (y * width + xCoord) * 4;
                     const oldIdx = ((y + offset) * width + xCoord) * 4;
-
                     const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]);
                     currentDifference += diff;
                 }
-
                 if (currentDifference < minDifference) {
                     minDifference = currentDifference;
                     bestOffset = offset;
                 }
             }
-
             return bestOffset;
         }
 
@@ -162,28 +157,34 @@
 
             const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
-            hiddenCanvas.width = sliceWidth;
-            hiddenCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
-            const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
-
             if (stabilizing) {
+                hiddenCanvas.width = sliceWidth;
+                hiddenCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+                const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
+                
                 const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
                 accumulatedY += offset;
                 accumulatedY += (verticalMargin - accumulatedY) * springFactor;
                 if (accumulatedY < 0) accumulatedY = 0;
                 if (accumulatedY > verticalMargin * 2) accumulatedY = verticalMargin * 2;
-            } else { accumulatedY = verticalMargin; }
+                
+                lastSliceData = currentSliceImageData.data;
 
-            lastSliceData = currentSliceImageData.data;
-
-            ctx.drawImage(
-                hiddenCanvas,
-                0, 0, sliceWidth, video.videoHeight,
-                xpos, accumulatedY, sliceWidth, pano.height - (verticalMargin * 2)
-            );
+                ctx.drawImage(
+                    hiddenCanvas,
+                    0, 0, sliceWidth, video.videoHeight,
+                    xpos, accumulatedY, sliceWidth, pano.height - (verticalMargin * 2)
+                );
+            } else {
+                accumulatedY = verticalMargin;
+                ctx.drawImage(
+                    video,
+                    centerX, 0, sliceWidth, video.videoHeight,
+                    xpos, accumulatedY, sliceWidth, pano.height - (verticalMargin * 2)
+                );
+            }
 
             xpos += sliceWidth;
-
             const percent = (xpos / pano.width) * 100;
             progress.style.width = `${percent}%`;
 
