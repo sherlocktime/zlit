@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Scanner Slit Scan (Rendija Móvil)</title>
+
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+
+    <style>
+        :root { --bg: #000000; --border: rgba(255, 255, 255, 0.08); --accent: #ffcc00; --text: #ffffff; --muted: #8e8e93; --btn-bg: rgba(255, 255, 255, 0.08); --btn-hover: rgba(255, 255, 255, 0.15); --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: calc(12px + env(safe-area-inset-top, 12px)) 16px calc(12px + env(safe-area-inset-bottom, 12px)); background: var(--bg); color: var(--text); font-family: var(--font-main); min-height: 100vh; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+        h2 { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; text-align: center; }
+        .video-container { position: relative; width: 45vw; max-width: 200px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; background: #000; }
+        video { width: 100%; height: auto; display: block; }
+        .slit-guide { position: absolute; top: 0; bottom: 0; left: 0%; width: 2px; background-color: var(--accent); box-shadow: 0 0 8px var(--accent); pointer-events: none; display: none; transition: left 0.05s linear; }
+        .scanning .slit-guide { display: block; }
+        .controls { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; width: 100%; max-width: 400px; }
+        .controls button { grid-column: span 3; }
+        button { font-family: inherit; font-weight: 600; color: var(--text); background: var(--btn-bg); border: 1px solid var(--border); height: 46px; border-radius: 10px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: background 0.15s, transform 0.1s, border-color 0.15s, color 0.15s; }
+        button:active { transform: scale(0.97); background: var(--btn-hover); }
+        #toggleBtn { font-size: 1.25rem; }
+        #toggleBtn.running { color: var(--accent); border-color: rgba(255, 204, 0, 0.3); background: rgba(255, 204, 0, 0.08); }
+        #saveBtn { background: rgba(255, 255, 255, 0.12); }
+        #speedBtn, #stabBtn, #camBtn { grid-column: span 2; }
+        .status-panel { font-size: 11px; color: var(--muted); text-align: center; width: 100%; max-width: 400px; }
+        .progress-bar { width: 100%; height: 4px; background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
+        #progress { width: 0%; height: 100%; background-color: var(--accent); transition: width 0.1s linear; }
+        canvas { width: 100%; max-width: 500px; height: auto; border: 1px solid var(--border); background: black; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7); }
+    </style>
+</head>
+
+<body>
+
+    <h2>Rendija Móvil (Scanner)</h2>
+
+    <div class="video-container" id="videoWrapper">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="slit-guide" id="slitGuide"></div>
+    </div>
+
+    <div class="controls">
+        <button id="toggleBtn">▶</button>
+        <button id="saveBtn">Guardar</button>
+        <button id="speedBtn">1 px</button>
+        <button id="stabBtn">Rápido</button>
+        <button id="camBtn">Entorno</button>
+    </div>
+
+    <div class="status-panel">
+        <span id="statusTxt">Cargando cámara...</span>
+        <div class="progress-bar" style="margin-top: 8px;">
+            <div id="progress"></div>
+        </div>
+    </div>
+
+    <canvas id="panorama" width="1280" height="720"></canvas>
+
+    <script>
+        const video = document.getElementById("video");
+        const videoWrapper = document.getElementById("videoWrapper");
+        const slitGuide = document.getElementById("slitGuide");
+        const pano = document.getElementById("panorama");
+        const ctx = pano.getContext("2d", { alpha: false });
+        const statusTxt = document.getElementById("statusTxt");
+        const progress = document.getElementById("progress");
+        const speedBtn = document.getElementById("speedBtn");
+        const toggleBtn = document.getElementById("toggleBtn");
+        const stabBtn = document.getElementById("stabBtn");
+        const camBtn = document.getElementById("camBtn");
+
+        let facingMode = "environment";
+        let currentStream = null;
+        let running = false;
+        let xpos = 0;
+
+        // Nuevas velocidades solicitadas
+        const speeds = [1, 2, 3, 4, 5];
+        let speedIndex = 0;
+        let sliceWidth = speeds[speedIndex];
+
+        // --- VARIABLES PARA ESTABILIZACIÓN ---
+        let stabilizing = false;
+        let lastSliceData = null;
+        let accumulatedY = 0;
+        const springFactor = 0.05;
+
+        const hiddenCanvas = document.createElement("canvas");
+        const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+
+
+        async function startCamera() {
+            try {
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                currentStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
+                video.srcObject = currentStream;
+
+                video.onloadedmetadata = () => {
+                    // Ajuste dinamico del lienzo al tamaño real de captura del flujo de video
+                    pano.width = video.videoWidth;
+                    pano.height = video.videoHeight;
+
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(0, 0, pano.width, pano.height);
+
+                    hiddenCanvas.height = video.videoHeight;
+
+                    statusTxt.innerText =
+                        facingMode === "environment"
+                            ? "Cámara trasera lista."
+                            : "Cámara frontal lista.";
+                };
+
+            } catch (err) {
+                statusTxt.innerText = "Error de cámara: " + err.message;
+            }
+        }
+
+        function getVerticalOffset(newData, oldData, width, height) {
+            if (!oldData) return 0;
+            let bestOffset = 0;
+            let minDifference = Infinity;
+            const searchRange = 10;
+            const xCoord = 0;
+
+            for (let offset = -searchRange; offset <= searchRange; offset++) {
+                let currentDifference = 0;
+                for (let y = searchRange; y < height - searchRange; y += 8) { 
+                    const currentIdx = (y * width + xCoord) * 4;
+                    const oldIdx = ((y + offset) * width + xCoord) * 4;
+                    if (oldIdx >= 0 && oldIdx < oldData.length) {
+                        const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]);
+                        currentDifference += diff;
+                    }
+                }
+                if (currentDifference < minDifference) {
+                    minDifference = currentDifference;
+                    bestOffset = offset;
+                }
+            }
+            return bestOffset;
+        }
+
+        function captureSlice() {
+            if (!running) return;
+
+            // La rebanada se desplaza dinámicamente de izquierda a derecha junto con xpos
+            const sourceX = xpos;
+
+            // Asegurarse de no intentar leer fuera de los límites del video original
+            if (sourceX + sliceWidth > video.videoWidth) return;
+
+            if (stabilizing) {
+                hiddenCanvas.width = sliceWidth;
+                hiddenCtx.drawImage(video, sourceX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+                const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
+                
+                const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
+                accumulatedY += offset;
+                accumulatedY += (0 - accumulatedY) * springFactor; // tiende a volver a 0 (centro vertical real)
+                
+                lastSliceData = currentSliceImageData.data;
+
+                ctx.drawImage(
+                    hiddenCanvas,
+                    0, 0, sliceWidth, video.videoHeight,
+                    xpos, accumulatedY, sliceWidth, pano.height
+                );
+            } else {
+                accumulatedY = 0;
+                ctx.drawImage(
+                    video,
+                    sourceX, 0, sliceWidth, video.videoHeight,
+                    xpos, 0, sliceWidth, pano.height
+                );
+            }
+
+            // Desplazar la barra/línea guía visual en el HTML
+            const pctGuide = (xpos / video.videoWidth) * 100;
+            slitGuide.style.left = `${pctGuide}%`;
+
+            xpos += sliceWidth;
+            const percent = (xpos / pano.width) * 100;
+            progress.style.width = `${percent}%`;
+
+            // El escaneo finaliza de manera limpia al tocar el límite derecho del video
+            if (xpos >= pano.width) {
+                running = false;
+                videoWrapper.classList.remove("scanning");
+                statusTxt.innerText = "¡Foto escaneada con éxito!";
+                toggleBtn.innerText = "▶";
+                toggleBtn.classList.remove("running");
+                hacerRuido();
+                return;
+            }
+
+            requestAnimationFrame(captureSlice);
+        }
+
+        toggleBtn.onclick = () => {
+            if (!video.videoWidth) return;
+
+            if (running) {
+                running = false;
+                videoWrapper.classList.remove("scanning");
+                statusTxt.innerText = "Pausado.";
+                toggleBtn.innerText = "▷";
+                toggleBtn.classList.remove("running");
+                return;
+            }
+
+            if (xpos >= pano.width) {
+                xpos = 0;
+                accumulatedY = 0;
+                lastSliceData = null;
+                progress.style.width = "0%";
+                slitGuide.style.left = "0%";
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, pano.width, pano.height);
+            }
+
+            running = true;
+            videoWrapper.classList.add("scanning");
+            statusTxt.innerText = "Escaneando de izquierda a derecha...";
+            toggleBtn.innerText = "□";
+            toggleBtn.classList.add("running");
+
+            captureSlice();
+        };
+
+        speedBtn.onclick = () => {
+            speedIndex = (speedIndex + 1) % speeds.length;
+            sliceWidth = speeds[speedIndex];
+            speedBtn.innerText = `${sliceWidth} px`;
+            lastSliceData = null;
+        };
+
+        stabBtn.onclick = () => {
+            stabilizing = !stabilizing;
+            if (stabilizing) {
+                stabBtn.innerText = "Estable";
+            } else {
+                stabBtn.innerText = "Rápido";
+                accumulatedY = 0;
+                lastSliceData = null;
+            }
+        };
+
+        camBtn.onclick = async () => {
+            if (running) return;
+
+            facingMode = facingMode === "environment" ? "user" : "environment";
+            camBtn.innerText = facingMode === "environment" ? "Entorno" : "Usuario";
+
+            await startCamera();
+        };
+
+        document.getElementById("saveBtn").onclick = () => {
+            const timestamp = () =>
+                new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
+
+            const nombreArchivo = `scan_${timestamp()}.jpg`;
+
+            const a = document.createElement("a");
+            a.href = pano.toDataURL("image/jpeg", 0.92);
+            a.download = nombreArchivo;
+            a.click();
+            hacerRuido();
+        };
+
+        function hacerRuido() {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(880.00, audioCtx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        }
+
+        startCamera();
+    </script>
+</body>
+
+</html>
