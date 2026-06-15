@@ -14,19 +14,20 @@
         :root { --bg: #000000; --border: rgba(255, 255, 255, 0.08); --accent: #ffcc00; --text: #ffffff; --muted: #8e8e93; --btn-bg: rgba(255, 255, 255, 0.08); --btn-hover: rgba(255, 255, 255, 0.15); --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
-        /* ESTILOS BASE (Por defecto optimizado para Vertical) */
+        /* ESTILOS BASE (Vertical - Portrait) */
         body { margin: 0; padding: calc(16px + env(safe-area-inset-top, 16px)) 16px calc(16px + env(safe-area-inset-bottom, 16px)); background: var(--bg); color: var(--text); font-family: var(--font-main); min-height: 100vh; display: flex; flex-direction: column; align-items: center; gap: 16px; }
         h2 { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; text-align: center; }
         
+        /* Preview en vertical */
         .video-container { position: relative; width: 45vw; max-width: 180px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; background: #000; }
         video { width: 100%; height: auto; display: block; }
         .slit-guide { position: absolute; top: 0; bottom: 0; left: 0%; width: 2px; background-color: var(--accent); box-shadow: 0 0 8px var(--accent); pointer-events: none; display: none; transition: left 0.05s linear; }
         .scanning .slit-guide { display: block; }
         
-        /* Controles en Vertical: Cuadrícula de 6 columnas para armar 2 bloques cómodos */
+        /* Botones en vertical (2 filas) */
         .controls { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; width: 100%; max-width: 400px; }
-        .controls button { grid-column: span 2; } /* Los de abajo ocupan 2 col de las 6 (entran 3) */
-        #toggleBtn, #saveBtn { grid-column: span 3; } /* Los de arriba ocupan 3 col cada uno (entran 2) */
+        .controls button { grid-column: span 2; } 
+        #toggleBtn, #saveBtn { grid-column: span 3; } 
         
         button { font-family: inherit; font-weight: 600; color: var(--text); background: var(--btn-bg); border: 1px solid var(--border); height: 46px; border-radius: 10px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: background 0.15s, transform 0.1s, border-color 0.15s, color 0.15s; width: 100%; }
         button:active { transform: scale(0.97); background: var(--btn-hover); }
@@ -39,20 +40,20 @@
         #progress { width: 0%; height: 100%; background-color: var(--accent); transition: width 0.1s linear; }
         canvas { width: 100%; max-width: 500px; height: auto; border: 1px solid var(--border); background: black; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7); }
 
-        /* ==========================================================================
-           CAMBIO DINÁMICO: Cuando la pantalla es más ancha que alta (Horizontal)
-           ========================================================================== */
+        /* MODO HORIZONTAL (Landscape)*/
         @media (orientation: landscape) {
-            body { padding: calc(6px + env(safe-area-inset-top, 6px)) 16px calc(6px + env(safe-area-inset-bottom, 6px)); gap: 10px; }
-            .video-container { max-width: 130px; }
+            body { padding: calc(8px + env(safe-area-inset-top, 8px)) 16px calc(8px + env(safe-area-inset-bottom, 8px)); gap: 12px; }
             
-            /* Reescribimos la grilla a una sola linea de 5 columnas */
-            .controls { grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 520px; }
-            .controls button, #toggleBtn, #saveBtn { grid-column: span 1 !important; height: 38px; font-size: 12px; }
+            /* Agrandamos el tamaño maximo de la preview en horizontal */
+            .video-container { width: 35vw; max-width: 260px; }
+            
+            /* Botones en una sola linea */
+            .controls { grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 560px; }
+            .controls button, #toggleBtn, #saveBtn { grid-column: span 1 !important; height: 40px; font-size: 12px; }
             #toggleBtn { font-size: 1.1rem; }
             
-            .status-panel { max-width: 520px; }
-            canvas { max-width: 450px; }
+            .status-panel { max-width: 560px; }
+            canvas { max-width: 500px; }
         }
     </style>
 </head>
