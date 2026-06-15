@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Scanner Slit Scan (Rendija Móvil)</title>
+    <title>Scanner Slit Scan (Simplificado)</title>
 
     <link rel="manifest" href="manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -78,12 +78,10 @@
         let running = false;
         let xpos = 0;
 
-        // Nuevas velocidades solicitadas
         const speeds = [1, 2, 3, 4, 5];
         let speedIndex = 0;
         let sliceWidth = speeds[speedIndex];
 
-        // --- VARIABLES PARA ESTABILIZACIÓN ---
         let stabilizing = false;
         let lastSliceData = null;
         let accumulatedY = 0;
@@ -92,6 +90,16 @@
         const hiddenCanvas = document.createElement("canvas");
         const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
 
+        // Ajusta el lienzo según el estado actual del video
+        function ajustarLienzo() {
+            if (video.videoWidth) {
+                pano.width = video.videoWidth;
+                pano.height = video.videoHeight;
+                hiddenCanvas.height = video.videoHeight;
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, pano.width, pano.height);
+            }
+        }
 
         async function startCamera() {
             try {
@@ -108,21 +116,9 @@
                 });
 
                 video.srcObject = currentStream;
-
                 video.onloadedmetadata = () => {
-                    // Ajuste dinamico del lienzo al tamaño real de captura del flujo de video
-                    pano.width = video.videoWidth;
-                    pano.height = video.videoHeight;
-
-                    ctx.fillStyle = "black";
-                    ctx.fillRect(0, 0, pano.width, pano.height);
-
-                    hiddenCanvas.height = video.videoHeight;
-
-                    statusTxt.innerText =
-                        facingMode === "environment"
-                            ? "Cámara trasera lista."
-                            : "Cámara frontal lista.";
+                    ajustarLienzo();
+                    statusTxt.innerText = facingMode === "environment" ? "Cámara trasera lista." : "Cámara frontal lista.";
                 };
 
             } catch (err) {
@@ -158,50 +154,33 @@
         function captureSlice() {
             if (!running) return;
 
-            // La rebanada se desplaza dinámicamente de izquierda a derecha junto con xpos
-            const sourceX = xpos;
-
-            // Asegurarse de no intentar leer fuera de los límites del video original
-            if (sourceX + sliceWidth > video.videoWidth) return;
+            if (xpos + sliceWidth > video.videoWidth) return;
 
             if (stabilizing) {
                 hiddenCanvas.width = sliceWidth;
-                hiddenCtx.drawImage(video, sourceX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
+                hiddenCtx.drawImage(video, xpos, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
                 const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
                 
                 const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
                 accumulatedY += offset;
-                accumulatedY += (0 - accumulatedY) * springFactor; // tiende a volver a 0 (centro vertical real)
+                accumulatedY += (0 - accumulatedY) * springFactor; 
                 
                 lastSliceData = currentSliceImageData.data;
 
-                ctx.drawImage(
-                    hiddenCanvas,
-                    0, 0, sliceWidth, video.videoHeight,
-                    xpos, accumulatedY, sliceWidth, pano.height
-                );
+                ctx.drawImage(hiddenCanvas, 0, 0, sliceWidth, video.videoHeight, xpos, accumulatedY, sliceWidth, pano.height);
             } else {
-                accumulatedY = 0;
-                ctx.drawImage(
-                    video,
-                    sourceX, 0, sliceWidth, video.videoHeight,
-                    xpos, 0, sliceWidth, pano.height
-                );
+                ctx.drawImage(video, xpos, 0, sliceWidth, video.videoHeight, xpos, 0, sliceWidth, pano.height);
             }
 
-            // Desplazar la barra/línea guía visual en el HTML
-            const pctGuide = (xpos / video.videoWidth) * 100;
-            slitGuide.style.left = `${pctGuide}%`;
+            slitGuide.style.left = `${(xpos / video.videoWidth) * 100}%`;
 
             xpos += sliceWidth;
-            const percent = (xpos / pano.width) * 100;
-            progress.style.width = `${percent}%`;
+            progress.style.width = `${(xpos / pano.width) * 100}%`;
 
-            // El escaneo finaliza de manera limpia al tocar el límite derecho del video
             if (xpos >= pano.width) {
                 running = false;
                 videoWrapper.classList.remove("scanning");
-                statusTxt.innerText = "¡Foto escaneada con éxito!";
+                statusTxt.innerText = "¡Foto escaneada!";
                 toggleBtn.innerText = "▶";
                 toggleBtn.classList.remove("running");
                 hacerRuido();
@@ -223,19 +202,19 @@
                 return;
             }
 
-            if (xpos >= pano.width) {
+            // Si es un escaneo nuevo o reinicio, chequear rotación real justo antes de empezar
+            if (xpos === 0 || xpos >= pano.width) {
+                ajustarLienzo(); 
                 xpos = 0;
                 accumulatedY = 0;
                 lastSliceData = null;
                 progress.style.width = "0%";
                 slitGuide.style.left = "0%";
-                ctx.fillStyle = "black";
-                ctx.fillRect(0, 0, pano.width, pano.height);
             }
 
             running = true;
             videoWrapper.classList.add("scanning");
-            statusTxt.innerText = "Escaneando de izquierda a derecha...";
+            statusTxt.innerText = "Escaneando...";
             toggleBtn.innerText = "□";
             toggleBtn.classList.add("running");
 
@@ -251,33 +230,23 @@
 
         stabBtn.onclick = () => {
             stabilizing = !stabilizing;
-            if (stabilizing) {
-                stabBtn.innerText = "Estable";
-            } else {
-                stabBtn.innerText = "Rápido";
-                accumulatedY = 0;
-                lastSliceData = null;
-            }
+            stabBtn.innerText = stabilizing ? "Estable" : "Rápido";
+            accumulatedY = 0;
+            lastSliceData = null;
         };
 
         camBtn.onclick = async () => {
             if (running) return;
-
             facingMode = facingMode === "environment" ? "user" : "environment";
             camBtn.innerText = facingMode === "environment" ? "Entorno" : "Usuario";
-
             await startCamera();
         };
 
         document.getElementById("saveBtn").onclick = () => {
-            const timestamp = () =>
-                new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
-
-            const nombreArchivo = `scan_${timestamp()}.jpg`;
-
+            const timestamp = () => new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
             const a = document.createElement("a");
             a.href = pano.toDataURL("image/jpeg", 0.92);
-            a.download = nombreArchivo;
+            a.download = `scan_${timestamp()}.jpg`;
             a.click();
             hacerRuido();
         };
