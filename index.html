@@ -89,8 +89,10 @@
         let accumulatedY = verticalMargin;
         const springFactor = 0.05;
 
-        const hiddenCanvas = document.createElement("canvas");
-        const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+        const refCanvas = document.createElement("canvas");
+        const refCtx = refCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+
+        const REF_WIDTH = 32;
 
 
         async function startCamera() {
@@ -129,23 +131,34 @@
             }
         }
 
-        function getVerticalOffset(newData, oldData, width, height) {
-            if (!oldData) return 0;
+        function getVerticalOffset(newRefData, oldRefData, refWidth, frameHeight) {
+            if (!oldRefData) return 0;
+
+            const yStart  = Math.floor(frameHeight / 3);       // tercio central: inicio
+            const yEnd    = Math.floor((frameHeight / 3) * 2); // tercio central: fin
+            const searchRange = 12;
+
             let bestOffset = 0;
-            let minDifference = Infinity;
-            const searchRange = 10;
-            const xCoord = 0;
+            let minDiff = Infinity;
 
             for (let offset = -searchRange; offset <= searchRange; offset++) {
-                let currentDifference = 0;
-                for (let y = searchRange; y < height - searchRange; y += 8) { 
-                    const currentIdx = (y * width + xCoord) * 4;
-                    const oldIdx = ((y + offset) * width + xCoord) * 4;
-                    const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]);
-                    currentDifference += diff;
+                let diff = 0;
+                for (let y = yStart; y < yEnd; y += 6) {       // paso de 6: velocidad vs precisión
+                    for (let x = 0; x < refWidth; x += 4) {    // varias columnas: robustez
+                        const idxNew = (y * refWidth + x) * 4;
+                        const yOld   = y + offset;
+                        if (yOld < 0 || yOld >= frameHeight) continue;
+                        const idxOld = (yOld * refWidth + x) * 4;
+
+                        // luminancia percibida en vez de solo canal verde
+                        const lumNew = newRefData[idxNew] * 0.30 + newRefData[idxNew + 1] * 0.59 + newRefData[idxNew + 2] * 0.11;
+                        const lumOld = oldRefData[idxOld] * 0.30 + oldRefData[idxOld + 1] * 0.59 + oldRefData[idxOld + 2] * 0.11;
+
+                        diff += Math.abs(lumNew - lumOld);
+                    }
                 }
-                if (currentDifference < minDifference) {
-                    minDifference = currentDifference;
+                if (diff < minDiff) {
+                    minDiff  = diff;
                     bestOffset = offset;
                 }
             }
@@ -155,32 +168,37 @@
         function captureSlice() {
             if (!running) return;
 
-            const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
+            const centerX    = Math.floor(video.videoWidth  / 2 - sliceWidth / 2);
+            const refCenterX = Math.floor(video.videoWidth  / 2 - REF_WIDTH  / 2);
 
             if (stabilizing) {
-                hiddenCanvas.width = sliceWidth;
-                hiddenCtx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
-                const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
-                
-                const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
+                // 1. Capturar franja de referencia (centro del frame, ancha y fija)
+                refCanvas.width  = REF_WIDTH;
+                refCanvas.height = video.videoHeight;
+                refCtx.drawImage(video, refCenterX, 0, REF_WIDTH, video.videoHeight,
+                                        0,          0, REF_WIDTH, video.videoHeight);
+                const currentRefData = refCtx.getImageData(0, 0, REF_WIDTH, video.videoHeight).data;
+
+                // 2. Calcular offset usando la franja de referencia
+                const offset = getVerticalOffset(currentRefData, lastSliceData, REF_WIDTH, video.videoHeight);
                 accumulatedY += offset;
                 accumulatedY += (verticalMargin - accumulatedY) * springFactor;
-                if (accumulatedY < 0) accumulatedY = 0;
-                if (accumulatedY > verticalMargin * 2) accumulatedY = verticalMargin * 2;
-                
-                lastSliceData = currentSliceImageData.data;
+                accumulatedY  = Math.max(0, Math.min(verticalMargin * 2, accumulatedY));
 
+                lastSliceData = currentRefData; // guardar referencia para el próximo frame
+
+                // 3. Dibujar la rodaja real (slit) al canvas panorámico
                 ctx.drawImage(
-                    hiddenCanvas,
-                    0, 0, sliceWidth, video.videoHeight,
-                    xpos, accumulatedY, sliceWidth, pano.height - (verticalMargin * 2)
+                    video,
+                    centerX, 0,           sliceWidth, video.videoHeight,
+                    xpos,    accumulatedY, sliceWidth, pano.height - verticalMargin * 2
                 );
             } else {
                 accumulatedY = verticalMargin;
                 ctx.drawImage(
                     video,
-                    centerX, 0, sliceWidth, video.videoHeight,
-                    xpos, accumulatedY, sliceWidth, pano.height - (verticalMargin * 2)
+                    centerX, 0,           sliceWidth, video.videoHeight,
+                    xpos,    accumulatedY, sliceWidth, pano.height - verticalMargin * 2
                 );
             }
 
