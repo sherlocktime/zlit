@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Rendija de Barrido</title>
+    <title>Barrido de Rendija</title>
 
     <link rel="manifest" href="manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -13,51 +13,29 @@
     <style>
         :root { --bg: #000000; --border: rgba(255, 255, 255, 0.08); --accent: #ffcc00; --text: #ffffff; --muted: #8e8e93; --btn-bg: rgba(255, 255, 255, 0.08); --btn-hover: rgba(255, 255, 255, 0.15); --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        
-        /* ESTILOS BASE (Por defecto optimizado para Vertical) */
         body { margin: 0; padding: calc(16px + env(safe-area-inset-top, 16px)) 16px calc(16px + env(safe-area-inset-bottom, 16px)); background: var(--bg); color: var(--text); font-family: var(--font-main); min-height: 100vh; display: flex; flex-direction: column; align-items: center; gap: 16px; }
         h2 { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; text-align: center; }
-        
-        .video-container { position: relative; width: 45vw; max-width: 180px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; background: #000; }
+        .video-container { position: relative; width: 70vw; max-width: 320px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; background: #000; }
         video { width: 100%; height: auto; display: block; }
         .slit-guide { position: absolute; top: 0; bottom: 0; left: 0%; width: 2px; background-color: var(--accent); box-shadow: 0 0 8px var(--accent); pointer-events: none; display: none; transition: left 0.05s linear; }
         .scanning .slit-guide { display: block; }
-        
-        /* Controles en Vertical: Cuadrícula de 6 columnas para armar 2 bloques cómodos */
-        .controls { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; width: 100%; max-width: 400px; }
-        .controls button { grid-column: span 2; } /* Los de abajo ocupan 2 col de las 6 (entran 3) */
-        #toggleBtn, #saveBtn { grid-column: span 3; } /* Los de arriba ocupan 3 col cada uno (entran 2) */
-        
-        button { font-family: inherit; font-weight: 600; color: var(--text); background: var(--btn-bg); border: 1px solid var(--border); height: 46px; border-radius: 10px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: background 0.15s, transform 0.1s, border-color 0.15s, color 0.15s; width: 100%; }
+        .controls { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 46px); gap: 10px; width: 100%; max-width: 400px; }
+        button { font-family: inherit; font-weight: 600; color: var(--text); background: var(--btn-bg); border: 1px solid var(--border); height: 100%; border-radius: 10px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: background 0.15s, transform 0.1s, border-color 0.15s, color 0.15s; width: 100%; }
         button:active { transform: scale(0.97); background: var(--btn-hover); }
-        #toggleBtn { font-size: 1.25rem; }
+        #toggleBtn { font-size: 1.25rem; grid-row: span 2; }
         #toggleBtn.running { color: var(--accent); border-color: rgba(255, 204, 0, 0.3); background: rgba(255, 204, 0, 0.08); }
         #saveBtn { background: rgba(255, 255, 255, 0.12); }
-        
         .status-panel { font-size: 11px; color: var(--muted); text-align: center; width: 100%; max-width: 400px; }
         .progress-bar { width: 100%; height: 4px; background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
         #progress { width: 0%; height: 100%; background-color: var(--accent); transition: width 0.1s linear; }
         canvas { width: 100%; max-width: 500px; height: auto; border: 1px solid var(--border); background: black; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7); }
-
-        /* CAMBIO DINÁMICO: Cuando la pantalla es más ancha que alta (Horizontal) */
-        @media (orientation: landscape) {
-            body { padding: calc(6px + env(safe-area-inset-top, 6px)) 16px calc(6px + env(safe-area-inset-bottom, 6px)); gap: 10px; }
-            .video-container { max-width: 130px; }
-            
-            /* Reescribimos la grilla a una sola linea de 5 columnas */
-            .controls { grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 520px; }
-            .controls button, #toggleBtn, #saveBtn { grid-column: span 1 !important; height: 38px; font-size: 12px; }
-            #toggleBtn { font-size: 1.1rem; }
-            
-            .status-panel { max-width: 520px; }
-            canvas { max-width: 450px; }
-        }
+        @media (orientation: landscape) { body { padding: calc(6px + env(safe-area-inset-top, 6px)) 16px calc(6px + env(safe-area-inset-bottom, 6px)); gap: 10px; } .video-container { width: 40vw; max-width: 240px; } .controls { grid-template-columns: repeat(5, 1fr); grid-template-rows: 38px; gap: 8px; max-width: 520px; } .controls button, #toggleBtn, #saveBtn { grid-column: span 1 !important; grid-row: span 1 !important; height: 100%; font-size: 12px; } #toggleBtn { font-size: 1.1rem; } .status-panel { max-width: 520px; } canvas { max-width: 450px; } }
     </style>
 </head>
 
 <body>
 
-    <h2>Rendija de Barrido</h2>
+    <h2>Barrido de Rendija</h2>
 
     <div class="video-container" id="videoWrapper">
         <video id="video" autoplay playsinline muted></video>
@@ -66,10 +44,10 @@
 
     <div class="controls">
         <button id="toggleBtn">▶</button>
-        <button id="saveBtn">Guardar</button>
         <button id="speedBtn">1 px</button>
-        <button id="stabBtn">Rápido</button>
+        <button id="dirBtn">Derecha</button>
         <button id="camBtn">Entorno</button>
+        <button id="saveBtn">Guardar</button>
     </div>
 
     <div class="status-panel">
@@ -91,7 +69,7 @@
         const progress = document.getElementById("progress");
         const speedBtn = document.getElementById("speedBtn");
         const toggleBtn = document.getElementById("toggleBtn");
-        const stabBtn = document.getElementById("stabBtn");
+        const dirBtn = document.getElementById("dirBtn");
         const camBtn = document.getElementById("camBtn");
 
         let facingMode = "environment";
@@ -103,19 +81,12 @@
         let speedIndex = 0;
         let sliceWidth = speeds[speedIndex];
 
-        let stabilizing = false;
-        let lastSliceData = null;
-        let accumulatedY = 0;
-        const springFactor = 0.05;
-
-        const hiddenCanvas = document.createElement("canvas");
-        const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+        let sweepDirection = "right"; 
 
         function ajustarLienzo() {
             if (video.videoWidth) {
                 pano.width = video.videoWidth;
                 pano.height = video.videoHeight;
-                hiddenCanvas.height = video.videoHeight;
                 ctx.fillStyle = "black";
                 ctx.fillRect(0, 0, pano.width, pano.height);
             }
@@ -146,68 +117,40 @@
             }
         }
 
-        function getVerticalOffset(newData, oldData, width, height) {
-            if (!oldData) return 0;
-            let bestOffset = 0;
-            let minDifference = Infinity;
-            const searchRange = 10;
-            const xCoord = 0;
-
-            for (let offset = -searchRange; offset <= searchRange; offset++) {
-                let currentDifference = 0;
-                for (let y = searchRange; y < height - searchRange; y += 8) { 
-                    const currentIdx = (y * width + xCoord) * 4;
-                    const oldIdx = ((y + offset) * width + xCoord) * 4;
-                    if (oldIdx >= 0 && oldIdx < oldData.length) {
-                        const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]);
-                        currentDifference += diff;
-                    }
-                }
-                if (currentDifference < minDifference) {
-                    minDifference = currentDifference;
-                    bestOffset = offset;
-                }
-            }
-            return bestOffset;
-        }
-
         function captureSlice() {
             if (!running) return;
 
-            if (xpos + sliceWidth > video.videoWidth) return;
-
-            if (stabilizing) {
-                hiddenCanvas.width = sliceWidth;
-                hiddenCtx.drawImage(video, xpos, 0, sliceWidth, video.videoHeight, 0, 0, sliceWidth, video.videoHeight);
-                const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, video.videoHeight);
-                
-                const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, video.videoHeight);
-                accumulatedY += offset;
-                accumulatedY += (0 - accumulatedY) * springFactor; 
-                
-                lastSliceData = currentSliceImageData.data;
-
-                ctx.drawImage(hiddenCanvas, 0, 0, sliceWidth, video.videoHeight, xpos, accumulatedY, sliceWidth, pano.height);
-            } else {
-                ctx.drawImage(video, xpos, 0, sliceWidth, video.videoHeight, xpos, 0, sliceWidth, pano.height);
-            }
-
+            ctx.drawImage(video, xpos, 0, sliceWidth, video.videoHeight, xpos, 0, sliceWidth, pano.height);
             slitGuide.style.left = `${(xpos / video.videoWidth) * 100}%`;
 
-            xpos += sliceWidth;
-            progress.style.width = `${(xpos / pano.width) * 100}%`;
-
-            if (xpos >= pano.width) {
-                running = false;
-                videoWrapper.classList.remove("scanning");
-                statusTxt.innerText = "¡Foto escaneada!";
-                toggleBtn.innerText = "▶";
-                toggleBtn.classList.remove("running");
-                hacerRuido();
-                return;
+            if (sweepDirection === "right") {
+                xpos += sliceWidth;
+                progress.style.width = `${(xpos / pano.width) * 100}%`;
+                
+                if (xpos >= pano.width) {
+                    finalizarEscaneo();
+                    return;
+                }
+            } else {
+                xpos -= sliceWidth;
+                progress.style.width = `${((pano.width - xpos) / pano.width) * 100}%`;
+                
+                if (xpos <= 0) {
+                    finalizarEscaneo();
+                    return;
+                }
             }
 
             requestAnimationFrame(captureSlice);
+        }
+
+        function finalizarEscaneo() {
+            running = false;
+            videoWrapper.classList.remove("scanning");
+            statusTxt.innerText = "¡Foto escaneada!";
+            toggleBtn.innerText = "▶";
+            toggleBtn.classList.remove("running");
+            hacerRuido();
         }
 
         toggleBtn.onclick = () => {
@@ -222,13 +165,20 @@
                 return;
             }
 
-            if (xpos === 0 || xpos >= pano.width) {
-                ajustarLienzo(); 
-                xpos = 0;
-                accumulatedY = 0;
-                lastSliceData = null;
-                progress.style.width = "0%";
-                slitGuide.style.left = "0%";
+            if (sweepDirection === "right") {
+                if (xpos <= 0 || xpos >= pano.width) {
+                    ajustarLienzo();
+                    xpos = 0;
+                    progress.style.width = "0%";
+                    slitGuide.style.left = "0%";
+                }
+            } else {
+                if (xpos <= 0 || xpos >= pano.width) {
+                    ajustarLienzo();
+                    xpos = pano.width - sliceWidth;
+                    progress.style.width = "0%";
+                    slitGuide.style.left = "100%";
+                }
             }
 
             running = true;
@@ -244,14 +194,15 @@
             speedIndex = (speedIndex + 1) % speeds.length;
             sliceWidth = speeds[speedIndex];
             speedBtn.innerText = `${sliceWidth} px`;
-            lastSliceData = null;
         };
 
-        stabBtn.onclick = () => {
-            stabilizing = !stabilizing;
-            stabBtn.innerText = stabilizing ? "Estable" : "Rápido";
-            accumulatedY = 0;
-            lastSliceData = null;
+        dirBtn.onclick = () => {
+            if (running) return; 
+            sweepDirection = sweepDirection === "right" ? "left" : "right";
+            dirBtn.innerText = sweepDirection === "right" ? "Derecha" : "Izquierda";
+            xpos = sweepDirection === "right" ? 0 : pano.width - sliceWidth;
+            progress.style.width = "0%";
+            slitGuide.style.left = sweepDirection === "right" ? "0%" : "100%";
         };
 
         camBtn.onclick = async () => {
