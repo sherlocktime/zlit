@@ -47,7 +47,7 @@
     <div class="controls">
         <button id="toggleBtn">▶</button>
         <button id="saveBtn">Guardar</button>
-        <button id="speedBtn">Cal 4px</button>
+        <button id="speedBtn">4 px</button>
         <button id="stabBtn">Rápido</button>
         <button id="camBtn">Entorno</button>
     </div>
@@ -59,92 +59,108 @@
         </div>
     </div>
 
-    <canvas id="panorama" width="4000" height="400"></canvas>
+    <canvas id="panorama" width="2000" height="400"></canvas>
 
     <script>
-        const video        = document.getElementById("video");
+        const video = document.getElementById("video");
         const videoWrapper = document.getElementById("videoWrapper");
-        const pano         = document.getElementById("panorama");
-        const ctx          = pano.getContext("2d", { alpha: false });
-        const statusTxt    = document.getElementById("statusTxt");
-        const progress     = document.getElementById("progress");
-        const speedBtn     = document.getElementById("speedBtn");
-        const toggleBtn    = document.getElementById("toggleBtn");
-        const stabBtn      = document.getElementById("stabBtn");
-        const camBtn       = document.getElementById("camBtn");
+        const pano = document.getElementById("panorama");
+        const ctx = pano.getContext("2d", { alpha: false });
+        const statusTxt = document.getElementById("statusTxt");
+        const progress = document.getElementById("progress");
+        const speedBtn = document.getElementById("speedBtn");
+        const toggleBtn = document.getElementById("toggleBtn");
+        const stabBtn = document.getElementById("stabBtn");
+        const camBtn = document.getElementById("camBtn");
 
-        let facingMode     = "environment";
-        let currentStream  = null;
-        let running        = false;
-        let xpos           = 0;
+        let facingMode = "environment";
+        let currentStream = null;
+        let running = false;
+        let xpos = 0;
 
-        // Rodajas fijas por escaneo → determina el tiempo aprox. de captura.
-        // El ancho del canvas resultante = TOTAL_SLICES × sliceWidth.
-        // Con sliceWidth=8 → 4000px. Con sliceWidth=2 → 1000px.
-        // Para forzar siempre 4000px independientemente de la calidad,
-        // reemplazar pano.width = TOTAL_SLICES * sliceWidth por pano.width = 4000.
-        const TOTAL_SLICES = 500;
+        const speeds = [1, 2, 4, 8, 16];
+        let speedIndex = 2;
+        let sliceWidth = speeds[speedIndex];
 
-        const qualities    = [1, 2, 4, 8, 16];
-        let qualityIndex   = 3; // default: 8px → 4000px
-        let sliceWidth     = qualities[qualityIndex];
-
-        // Margen vertical que absorbe la corrección de estabilización
+        // --- VARIABLES PARA ESTABILIZACIÓN ---
+        let stabilizing = false;
+        let lastSliceData = null;
         const verticalMargin = 40;
-        let stabilizing    = false;
-        let lastSliceData  = null;
-        let accumulatedY   = verticalMargin;
+        let accumulatedY = verticalMargin;
         const springFactor = 0.05;
 
-        // Franja de referencia para estabilización: zona fija del centro del frame,
-        // independiente del slit. Medir el movimiento aquí y dibujar allá.
-        const REF_WIDTH    = 16;
-        const refCanvas    = document.createElement("canvas");
-        const refCtx       = refCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+        const refCanvas = document.createElement("canvas");
+        const refCtx = refCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+
+        const REF_WIDTH = 32;
 
 
         async function startCamera() {
             try {
-                if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
                 currentStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
+                    video: {
+                        facingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 });
+
                 video.srcObject = currentStream;
+
                 video.onloadedmetadata = () => {
-                    pano.height      = video.videoHeight;
-                    refCanvas.height = video.videoHeight;
-                    ctx.fillStyle    = "black";
+                    pano.height = video.videoHeight;
+
+                    ctx.fillStyle = "black";
                     ctx.fillRect(0, 0, pano.width, pano.height);
-                    statusTxt.innerText = facingMode === "environment" ? "Cámara trasera." : "Cámara frontal.";
+
+                    hiddenCanvas.height = video.videoHeight;
+
+                    statusTxt.innerText =
+                        facingMode === "environment"
+                            ? "Cámara trasera."
+                            : "Cámara frontal.";
                 };
+
             } catch (err) {
                 statusTxt.innerText = "Error de cámara: " + err.message;
             }
         }
 
-        // Correlación de imagen sobre el tercio central vertical (evita cielo/suelo).
-        // Compara luminancia ponderada en múltiples columnas para mayor robustez.
-        function getVerticalOffset(newData, oldData, refWidth, frameHeight) {
-            if (!oldData) return 0;
-            const yStart = Math.floor(frameHeight / 3);
-            const yEnd   = Math.floor((frameHeight / 3) * 2);
+        function getVerticalOffset(newRefData, oldRefData, refWidth, frameHeight) {
+            if (!oldRefData) return 0;
+
+            const yStart  = Math.floor(frameHeight / 3);       // tercio central: inicio
+            const yEnd    = Math.floor((frameHeight / 3) * 2); // tercio central: fin
             const searchRange = 12;
-            let bestOffset = 0, minDiff = Infinity;
+
+            let bestOffset = 0;
+            let minDiff = Infinity;
 
             for (let offset = -searchRange; offset <= searchRange; offset++) {
                 let diff = 0;
-                for (let y = yStart; y < yEnd; y += 8) {
-                    for (let x = 0; x < refWidth; x += 4) {
-                        const ni = (y * refWidth + x) * 4;
-                        const yo = y + offset;
-                        if (yo < 0 || yo >= frameHeight) continue;
-                        const oi = (yo * refWidth + x) * 4;
-                        const lumN = newData[ni] * 0.299 + newData[ni+1] * 0.587 + newData[ni+2] * 0.114;
-                        const lumO = oldData[oi] * 0.299 + oldData[oi+1] * 0.587 + oldData[oi+2] * 0.114;
-                        diff += Math.abs(lumN - lumO);
+                for (let y = yStart; y < yEnd; y += 6) {       // paso de 6: velocidad vs precisión
+                    for (let x = 0; x < refWidth; x += 4) {    // varias columnas: robustez
+                        const idxNew = (y * refWidth + x) * 4;
+                        const yOld   = y + offset;
+                        if (yOld < 0 || yOld >= frameHeight) continue;
+                        const idxOld = (yOld * refWidth + x) * 4;
+
+                        // luminancia percibida en vez de solo canal verde
+                        const lumNew = newRefData[idxNew] * 0.30 + newRefData[idxNew + 1] * 0.59 + newRefData[idxNew + 2] * 0.11;
+                        const lumOld = oldRefData[idxOld] * 0.30 + oldRefData[idxOld + 1] * 0.59 + oldRefData[idxOld + 2] * 0.11;
+
+                        diff += Math.abs(lumNew - lumOld);
                     }
                 }
-                if (diff < minDiff) { minDiff = diff; bestOffset = offset; }
+                if (diff < minDiff) {
+                    minDiff  = diff;
+                    bestOffset = offset;
+                }
             }
             return bestOffset;
         }
@@ -152,32 +168,43 @@
         function captureSlice() {
             if (!running) return;
 
-            const centerX    = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
-            const refCenterX = Math.floor(video.videoWidth / 2 - REF_WIDTH  / 2);
-            const destH      = pano.height - verticalMargin * 2;
+            const centerX    = Math.floor(video.videoWidth  / 2 - sliceWidth / 2);
+            const refCenterX = Math.floor(video.videoWidth  / 2 - REF_WIDTH  / 2);
 
             if (stabilizing) {
-                refCanvas.width = REF_WIDTH;
+                // 1. Capturar franja de referencia (centro del frame, ancha y fija)
+                refCanvas.width  = REF_WIDTH;
+                refCanvas.height = video.videoHeight;
                 refCtx.drawImage(video, refCenterX, 0, REF_WIDTH, video.videoHeight,
                                         0,          0, REF_WIDTH, video.videoHeight);
                 const currentRefData = refCtx.getImageData(0, 0, REF_WIDTH, video.videoHeight).data;
 
-                const offset  = getVerticalOffset(currentRefData, lastSliceData, REF_WIDTH, video.videoHeight);
+                // 2. Calcular offset usando la franja de referencia
+                const offset = getVerticalOffset(currentRefData, lastSliceData, REF_WIDTH, video.videoHeight);
                 accumulatedY += offset;
                 accumulatedY += (verticalMargin - accumulatedY) * springFactor;
                 accumulatedY  = Math.max(0, Math.min(verticalMargin * 2, accumulatedY));
-                lastSliceData = currentRefData;
 
-                ctx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight,
-                                     xpos, accumulatedY, sliceWidth, destH);
+                lastSliceData = currentRefData; // guardar referencia para el próximo frame
+
+                // 3. Dibujar la rodaja real (slit) al canvas panorámico
+                ctx.drawImage(
+                    video,
+                    centerX, 0,           sliceWidth, video.videoHeight,
+                    xpos,    accumulatedY, sliceWidth, pano.height - verticalMargin * 2
+                );
             } else {
                 accumulatedY = verticalMargin;
-                ctx.drawImage(video, centerX, 0, sliceWidth, video.videoHeight,
-                                     xpos, accumulatedY, sliceWidth, destH);
+                ctx.drawImage(
+                    video,
+                    centerX, 0,           sliceWidth, video.videoHeight,
+                    xpos,    accumulatedY, sliceWidth, pano.height - verticalMargin * 2
+                );
             }
 
             xpos += sliceWidth;
-            progress.style.width = `${(xpos / pano.width) * 100}%`;
+            const percent = (xpos / pano.width) * 100;
+            progress.style.width = `${percent}%`;
 
             if (xpos >= pano.width) {
                 running = false;
@@ -194,6 +221,7 @@
 
         toggleBtn.onclick = () => {
             if (!video.videoWidth) return;
+
             if (running) {
                 running = false;
                 videoWrapper.classList.remove("scanning");
@@ -203,65 +231,77 @@
                 return;
             }
 
-            // Resetear canvas al tamaño correcto para la calidad actual
-            xpos          = 0;
-            accumulatedY  = verticalMargin;
-            lastSliceData = null;
-            pano.width    = TOTAL_SLICES * sliceWidth;
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, pano.width, pano.height);
-            progress.style.width = "0%";
+            if (xpos >= pano.width) {
+                xpos = 0;
+                accumulatedY = verticalMargin;
+                lastSliceData = null;
+                progress.style.width = "0%";
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, pano.width, pano.height);
+            }
 
             running = true;
             videoWrapper.classList.add("scanning");
             statusTxt.innerText = "Escaneando...";
             toggleBtn.innerText = "□";
             toggleBtn.classList.add("running");
+
             captureSlice();
         };
 
         speedBtn.onclick = () => {
-            qualityIndex   = (qualityIndex + 1) % qualities.length;
-            sliceWidth     = qualities[qualityIndex];
-            speedBtn.innerText = `Cal ${sliceWidth}px`;
-            lastSliceData  = null;
+            speedIndex = (speedIndex + 1) % speeds.length;
+            sliceWidth = speeds[speedIndex];
+            speedBtn.innerText = `${sliceWidth} px`;
+            lastSliceData = null;
         };
 
         stabBtn.onclick = () => {
             stabilizing = !stabilizing;
-            stabBtn.innerText = stabilizing ? "Estable" : "Rápido";
-            if (!stabilizing) { accumulatedY = verticalMargin; lastSliceData = null; }
+            if (stabilizing) {
+                stabBtn.innerText = "Estable";
+            } else {
+                stabBtn.innerText = "Rápido";
+                accumulatedY = verticalMargin;
+                lastSliceData = null;
+            }
         };
 
         camBtn.onclick = async () => {
             if (running) return;
+
             facingMode = facingMode === "environment" ? "user" : "environment";
             camBtn.innerText = facingMode === "environment" ? "Entorno" : "Usuario";
+
             await startCamera();
         };
 
         document.getElementById("saveBtn").onclick = () => {
-            const ts = new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
-            const a  = document.createElement("a");
-            a.href   = pano.toDataURL("image/jpeg", 0.92);
-            a.download = `panorama_${ts}.jpg`;
+            const timestamp = () =>
+                new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
+
+            const nombreArchivo = `panorama_${timestamp()}.jpg`;
+
+            const a = document.createElement("a");
+            a.href = pano.toDataURL("image/jpeg", 0.92);
+            a.download = nombreArchivo;
             a.click();
             hacerRuido();
         };
 
         function hacerRuido() {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc      = audioCtx.createOscillator();
-            const gain     = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
-            osc.frequency.setValueAtTime(880.00, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
-            osc.start(audioCtx.currentTime);
-            osc.stop(audioCtx.currentTime + 0.3);
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(880.00, audioCtx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
         }
 
         startCamera();
