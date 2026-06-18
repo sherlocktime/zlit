@@ -89,15 +89,15 @@
         let accumulatedY = verticalMargin;
         const springFactor = 0.05;
 
-        const refCanvas = document.createElement("canvas");
-        const refCtx = refCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
+        // Proporción del centro a analizar (0.4 significa el 40% central de la altura)
+        const ROI_RATIO = 0.4; 
 
-        const REF_WIDTH = 32;
+        const hiddenCanvas = document.createElement("canvas");
+        const hiddenCtx = hiddenCanvas.getContext("2d", { alpha: false, willReadFrequently: true });
 
 
         async function startCamera() {
             try {
-
                 if (currentStream) {
                     currentStream.getTracks().forEach(track => track.stop());
                 }
@@ -118,7 +118,8 @@
                     ctx.fillStyle = "black";
                     ctx.fillRect(0, 0, pano.width, pano.height);
 
-                    hiddenCanvas.height = video.videoHeight;
+                    // Ahora el lienzo oculto solo mide el tamaño del área central (ROI)
+                    hiddenCanvas.height = Math.floor(video.videoHeight * ROI_RATIO);
 
                     statusTxt.innerText =
                         facingMode === "environment"
@@ -131,34 +132,30 @@
             }
         }
 
-        function getVerticalOffset(newRefData, oldRefData, refWidth, frameHeight) {
-            if (!oldRefData) return 0;
-
-            const yStart  = Math.floor(frameHeight / 3);       // tercio central: inicio
-            const yEnd    = Math.floor((frameHeight / 3) * 2); // tercio central: fin
-            const searchRange = 12;
-
+        // Modificado: Ahora 'height' representa el alto de la zona del centro, no del video completo
+        function getVerticalOffset(newData, oldData, width, height) {
+            if (!oldData) return 0;
             let bestOffset = 0;
-            let minDiff = Infinity;
+            let minDifference = Infinity;
+            const searchRange = 10;
+            const xCoord = 0;
 
             for (let offset = -searchRange; offset <= searchRange; offset++) {
-                let diff = 0;
-                for (let y = yStart; y < yEnd; y += 6) {       // paso de 6: velocidad vs precisión
-                    for (let x = 0; x < refWidth; x += 4) {    // varias columnas: robustez
-                        const idxNew = (y * refWidth + x) * 4;
-                        const yOld   = y + offset;
-                        if (yOld < 0 || yOld >= frameHeight) continue;
-                        const idxOld = (yOld * refWidth + x) * 4;
-
-                        // luminancia percibida en vez de solo canal verde
-                        const lumNew = newRefData[idxNew] * 0.30 + newRefData[idxNew + 1] * 0.59 + newRefData[idxNew + 2] * 0.11;
-                        const lumOld = oldRefData[idxOld] * 0.30 + oldRefData[idxOld + 1] * 0.59 + oldRefData[idxOld + 2] * 0.11;
-
-                        diff += Math.abs(lumNew - lumOld);
+                let currentDifference = 0;
+                
+                // Muestreamos solo dentro de la altura de la sub-imagen central
+                for (let y = searchRange; y < height - searchRange; y += 4) { 
+                    const currentIdx = (y * width + xCoord) * 4;
+                    // Buscamos el desfase vertical comparando con el frame anterior
+                    const oldY = y + offset;
+                    if (oldY >= 0 && oldY < height) {
+                        const oldIdx = (oldY * width + xCoord) * 4;
+                        const diff = Math.abs(newData[currentIdx + 1] - oldData[oldIdx + 1]); // Canal Verde (G)
+                        currentDifference += diff;
                     }
                 }
-                if (diff < minDiff) {
-                    minDiff  = diff;
+                if (currentDifference < minDifference) {
+                    minDifference = currentDifference;
                     bestOffset = offset;
                 }
             }
@@ -168,37 +165,45 @@
         function captureSlice() {
             if (!running) return;
 
-            const centerX    = Math.floor(video.videoWidth  / 2 - sliceWidth / 2);
-            const refCenterX = Math.floor(video.videoWidth  / 2 - REF_WIDTH  / 2);
+            const centerX = Math.floor(video.videoWidth / 2 - sliceWidth / 2);
 
             if (stabilizing) {
-                // 1. Capturar franja de referencia (centro del frame, ancha y fija)
-                refCanvas.width  = REF_WIDTH;
-                refCanvas.height = video.videoHeight;
-                refCtx.drawImage(video, refCenterX, 0, REF_WIDTH, video.videoHeight,
-                                        0,          0, REF_WIDTH, video.videoHeight);
-                const currentRefData = refCtx.getImageData(0, 0, REF_WIDTH, video.videoHeight).data;
+                const roiHeight = hiddenCanvas.height;
+                const roiY = Math.floor((video.videoHeight - roiHeight) / 2); // Inicio del corte vertical central
 
-                // 2. Calcular offset usando la franja de referencia
-                const offset = getVerticalOffset(currentRefData, lastSliceData, REF_WIDTH, video.videoHeight);
+                hiddenCanvas.width = sliceWidth;
+                
+                // OPTIMIZACIÓN: Solo volcamos en el lienzo oculto el fragmento del CENTRO de la pantalla
+                hiddenCtx.drawImage(
+                    video, 
+                    centerX, roiY, sliceWidth, roiHeight, // Origen: Centro-centro del video
+                    0, 0, sliceWidth, roiHeight          // Destino: Lienzo oculto
+                );
+                
+                const currentSliceImageData = hiddenCtx.getImageData(0, 0, sliceWidth, roiHeight);
+                
+                // Calculamos el offset basándonos únicamente en la porción central
+                const offset = getVerticalOffset(currentSliceImageData.data, lastSliceData, sliceWidth, roiHeight);
+                
                 accumulatedY += offset;
                 accumulatedY += (verticalMargin - accumulatedY) * springFactor;
-                accumulatedY  = Math.max(0, Math.min(verticalMargin * 2, accumulatedY));
+                if (accumulatedY < 0) accumulatedY = 0;
+                if (accumulatedY > verticalMargin * 2) accumulatedY = verticalMargin * 2;
+                
+                lastSliceData = currentSliceImageData.data;
 
-                lastSliceData = currentRefData; // guardar referencia para el próximo frame
-
-                // 3. Dibujar la rodaja real (slit) al canvas panorámico
+                // Dibujamos en el panorama la tira COMPLETA del video original usando el offset calculado
                 ctx.drawImage(
                     video,
-                    centerX, 0,           sliceWidth, video.videoHeight,
-                    xpos,    accumulatedY, sliceWidth, pano.height - verticalMargin * 2
+                    centerX, 0, sliceWidth, video.videoHeight,
+                    xpos, accumulatedY, sliceWidth, pano.height - (verticalMargin * 2)
                 );
             } else {
                 accumulatedY = verticalMargin;
                 ctx.drawImage(
                     video,
-                    centerX, 0,           sliceWidth, video.videoHeight,
-                    xpos,    accumulatedY, sliceWidth, pano.height - verticalMargin * 2
+                    centerX, 0, sliceWidth, video.videoHeight,
+                    xpos, accumulatedY, sliceWidth, pano.height - (verticalMargin * 2)
                 );
             }
 
@@ -293,7 +298,7 @@
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
-            oscillator.connect(gainNode);
+             oscillator.connect(gainNode);
             gainNode.connect(audioCtx.destination);
             oscillator.type = 'sine';
             oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
